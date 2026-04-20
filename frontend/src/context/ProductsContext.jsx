@@ -27,7 +27,11 @@ export function ProductsProvider({ children }) {
             unit:        p.unit || 'kg',
             stock:       Number(p.stock),
             image:       p.image_url
-              ? (p.image_url.startsWith('http') ? p.image_url : `${BACKEND_URL}${p.image_url}`)
+              ? (p.image_url.startsWith('http')
+                  ? p.image_url
+                  : p.image_url.startsWith('/images/')
+                    ? p.image_url            // served by Netlify static hosting
+                    : `${BACKEND_URL}${p.image_url}`)  // backend uploads
               : `https://images.pexels.com/photos/1300972/pexels-photo-1300972.jpeg?auto=compress&cs=tinysrgb&w=500`,
             featured:    p.is_featured || false,
             organic:     true,
