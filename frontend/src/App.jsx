@@ -1,22 +1,29 @@
+// v2
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { ToastProvider } from './context/ToastContext'
-import { CartProvider } from './context/CartContext'
+import { ToastProvider }    from './context/ToastContext'
+import { CartProvider }     from './context/CartContext'
 import { ProductsProvider } from './context/ProductsContext'
-import { OrdersProvider } from './context/OrdersContext'
+import { OrdersProvider }   from './context/OrdersContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
-import ToastContainer from './components/Toast'
-import HomePage from './pages/HomePage'
-import CartPage from './pages/CartPage'
-import CheckoutPage from './pages/CheckoutPage'
+import { WishlistProvider } from './context/WishlistContext'
+import Navbar               from './components/Navbar'
+import Footer               from './components/Footer'
+import BottomNav            from './components/BottomNav'
+import CartDrawer           from './components/CartDrawer'
+import ToastContainer       from './components/Toast'
+import HomePage             from './pages/HomePage'
+import CartPage             from './pages/CartPage'
+import CheckoutPage         from './pages/CheckoutPage'
 import OrderConfirmationPage from './pages/OrderConfirmationPage'
-import AdminPage from './pages/AdminPage'
-import LoginPage from './pages/LoginPage'
-import MyOrdersPage from './pages/MyOrdersPage'
+import AdminPage            from './pages/AdminPage'
+import LoginPage            from './pages/LoginPage'
+import MyOrdersPage         from './pages/MyOrdersPage'
+import ProductPage          from './pages/ProductPage'
+import WishlistPage         from './pages/WishlistPage'
+import ProfilePage          from './pages/ProfilePage'
+import OrderTrackingPage    from './pages/OrderTrackingPage'
 
-// Redirect unauthenticated users to /login, preserving intended destination
 function RequireAuth({ children }) {
   const { isLoggedIn } = useAuth()
   const location = useLocation()
@@ -31,32 +38,37 @@ export default function App() {
     <ToastProvider>
       <ProductsProvider>
         <OrdersProvider>
-          <CartProvider>
-            <AuthProvider>
-              <Router>
-                <div className="min-h-screen bg-farm-50 font-poppins flex flex-col">
-                  <Navbar />
-                  <ToastContainer />
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/login" element={<LoginPage />} />
-                      <Route path="/cart" element={<CartPage />} />
-                      <Route path="/checkout" element={
-                        <RequireAuth><CheckoutPage /></RequireAuth>
-                      } />
-                      <Route path="/confirmation/:orderId" element={<OrderConfirmationPage />} />
-                      <Route path="/my-orders" element={
-                        <RequireAuth><MyOrdersPage /></RequireAuth>
-                      } />
-                      <Route path="/admin" element={<AdminPage />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                </div>
-              </Router>
-            </AuthProvider>
-          </CartProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <AuthProvider>
+                <Router>
+                  <div className="min-h-screen bg-sage-50 font-poppins flex flex-col">
+                    <Navbar />
+                    <CartDrawer />
+                    <ToastContainer />
+                    <main className="flex-1 pb-20 md:pb-0">
+                      <Routes>
+                        <Route path="/"              element={<HomePage />} />
+                        <Route path="/product/:id"   element={<ProductPage />} />
+                        <Route path="/wishlist"       element={<WishlistPage />} />
+                        <Route path="/login"          element={<LoginPage />} />
+                        <Route path="/cart"           element={<CartPage />} />
+                        <Route path="/checkout"       element={<RequireAuth><CheckoutPage /></RequireAuth>} />
+                        <Route path="/confirmation/:orderId" element={<OrderConfirmationPage />} />
+                        <Route path="/track/:orderId" element={<OrderTrackingPage />} />
+                        <Route path="/my-orders"      element={<RequireAuth><MyOrdersPage /></RequireAuth>} />
+                        <Route path="/profile"        element={<RequireAuth><ProfilePage /></RequireAuth>} />
+                        <Route path="/admin"          element={<AdminPage />} />
+                        <Route path="*"               element={<Navigate to="/" replace />} />
+                      </Routes>
+                    </main>
+                    <Footer />
+                    <BottomNav />
+                  </div>
+                </Router>
+              </AuthProvider>
+            </CartProvider>
+          </WishlistProvider>
         </OrdersProvider>
       </ProductsProvider>
     </ToastProvider>

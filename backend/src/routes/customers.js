@@ -1,0 +1,8 @@
+import { Router } from 'express'
+import { getCustomers, getCustomerOrders, toggleCustomerStatus } from '../controllers/customersController.js'
+import { adminOnly } from '../middleware/auth.js'
+const r = Router()
+r.get('/', ...adminOnly, getCustomers)
+r.get('/:id/orders', ...adminOnly, getCustomerOrders)
+r.patch('/:id/toggle', ...adminOnly, toggleCustomerStatus)
+export default r

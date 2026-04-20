@@ -1,0 +1,62 @@
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { query } from '../config/database.js'
+
+function signToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role, name: user.name },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  )
+}
+
+export async function login(req, res) {
+  try {
+    const { email, password } = req.body
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+
+    const { rows } = await query('SELECT * FROM users WHERE email = $1', [email])
+    const user = rows[0]
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+
+    if (user.role !== 'admin') return res.status(403).json({ error: 'Admin access only' })
+
+    const token = signToken(user)
+    res.json({
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function me(req, res) {
+  try {
+    const { rows } = await query(
+      'SELECT id, name, email, role, phone FROM users WHERE id = $1',
+      [req.user.id]
+    )
+    res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id])
+    const user = rows[0]
+    const valid = await bcrypt.compare(currentPassword, user.password)
+    if (!valid) return res.status(400).json({ error: 'Current password incorrect' })
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashed, req.user.id])
+    res.json({ message: 'Password updated' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}

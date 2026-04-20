@@ -1,72 +1,111 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useOrders } from '../context/OrdersContext'
 import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { generateOrderId, OWNER_UPI_ID } from '../utils/whatsapp'
-import { calcDelivery } from '../utils/constants'
+import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD } from '../utils/constants'
+import { SERVICEABLE_PINCODES } from '../data/products2'
+import { generateOrderId } from '../utils/whatsapp'
 
-const STEPS = ['Cart', 'Details', 'Payment', 'Confirm']
+const STEPS = [
+  { id: 1, label: 'Delivery'  },
+  { id: 2, label: 'Schedule'  },
+  { id: 3, label: 'Payment'   },
+]
 
 export default function CheckoutPage() {
-  const { cart, totalPrice, clearCart } = useCart()
-  const { addOrder } = useOrders()
+  const { cart, totalPrice, clearCart, closeDrawer } = useCart()
+  const { addOrder }    = useOrders()
   const { decreaseStock } = useProducts()
-  const { user } = useAuth()
-  const { addToast } = useToast()
-  const navigate = useNavigate()
+  const { user }        = useAuth()
+  const { addToast }    = useToast()
+  const navigate        = useNavigate()
 
-  const [step, setStep] = useState(1)
-  const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    address: '',
-    city: '',
-    pincode: '',
-    notes: '',
-  })
-  const [paymentMethod, setPaymentMethod] = useState('cod')
-  const [errors, setErrors] = useState({})
+  const [step, setStep]   = useState(1)
   const [placing, setPlacing] = useState(false)
 
-  const deliveryFee = calcDelivery(totalPrice)
-  const finalTotal = totalPrice + deliveryFee
+  // Step 1 form
+  const [form, setForm] = useState({
+    name:    user?.name  || '',
+    phone:   '',
+    address: '',
+    city:    '',
+    pincode: '',
+    notes:   '',
+    saveAddress: false,
+  })
+  const [errors, setErrors] = useState({})
+  const [pincodeStatus, setPincodeStatus] = useState(null) // 'valid' | 'invalid' | null
+
+  // Step 2: delivery slot
+  const [selectedSlot, setSelectedSlot] = useState('morning')
+
+  // Step 3: payment
+  const [paymentMethod, setPaymentMethod] = useState('upi')
+
+  useEffect(() => { closeDrawer() }, [])
+
+  // Pincode validation
+  useEffect(() => {
+    const p = form.pincode.trim()
+    if (p.length === 6) {
+      setPincodeStatus(SERVICEABLE_PINCODES.has(p) ? 'valid' : 'invalid')
+    } else {
+      setPincodeStatus(null)
+    }
+  }, [form.pincode])
+
+  const activeSlot    = DELIVERY_SLOTS.find((s) => s.id === selectedSlot)
+  const slotFee       = totalPrice >= FREE_DELIVERY_THRESHOLD ? 0 : (activeSlot?.fee ?? 30)
+  const finalTotal    = totalPrice + slotFee
 
   if (cart.length === 0) {
     return (
       <div className="page-enter max-w-md mx-auto px-4 py-24 text-center">
-        <div className="text-6xl mb-4">🛒</div>
+        <div className="w-20 h-20 mx-auto rounded-full bg-sage-50 flex items-center justify-center mb-4">
+          <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 5M7 13l1.5 5m7-5l1.5 5M17 18a1 1 0 11-2 0 1 1 0 012 0zM9 18a1 1 0 11-2 0 1 1 0 012 0z" />
+          </svg>
+        </div>
         <h2 className="text-xl font-bold text-gray-700 mb-2">Your cart is empty</h2>
-        <Link to="/" className="btn-primary inline-flex items-center gap-2 mt-4">
-          <span>🌿</span> Go Shopping
-        </Link>
+        <Link to="/" className="btn-primary inline-flex mt-4">Go Shopping</Link>
       </div>
     )
   }
 
-  function validate() {
+  function setField(key, val) {
+    setForm((f) => ({ ...f, [key]: val }))
+    if (errors[key]) setErrors((e) => { const n = {...e}; delete n[key]; return n })
+  }
+
+  function validateStep1() {
     const errs = {}
-    if (!form.name.trim()) errs.name = 'Full name is required'
-    if (!/^[6-9]\d{9}$/.test(form.phone.trim())) errs.phone = 'Enter valid 10-digit Indian mobile number'
-    if (!form.address.trim()) errs.address = 'Delivery address is required'
-    if (!form.city.trim()) errs.city = 'City is required'
-    if (!/^\d{6}$/.test(form.pincode.trim())) errs.pincode = 'Enter valid 6-digit pincode'
+    if (!form.name.trim())                          errs.name    = 'Full name is required'
+    if (!/^[6-9]\d{9}$/.test(form.phone.trim()))   errs.phone   = 'Enter valid 10-digit Indian mobile number'
+    if (!form.address.trim())                       errs.address = 'Delivery address is required'
+    if (!form.city.trim())                          errs.city    = 'City is required'
+    if (!/^\d{6}$/.test(form.pincode.trim()))       errs.pincode = 'Enter valid 6-digit pincode'
+    if (form.pincode.length === 6 && !SERVICEABLE_PINCODES.has(form.pincode)) {
+      errs.pincode = 'Sorry, we don\'t deliver to this pincode yet'
+    }
     return errs
   }
 
   function handleNext() {
     if (step === 1) {
-      const errs = validate()
-      if (Object.keys(errs).length > 0) {
-        setErrors(errs)
-        addToast('Please fix the errors below', 'error')
-        return
-      }
+      const errs = validateStep1()
+      if (Object.keys(errs).length > 0) { setErrors(errs); addToast('Please fix the errors below', 'error'); return }
       setErrors({})
     }
-    setStep((s) => s + 1)
+    setStep((s) => Math.min(s + 1, 3))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function handleBack() {
+    setStep((s) => Math.max(s - 1, 1))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handlePlaceOrder() {
@@ -75,181 +114,244 @@ export default function CheckoutPage() {
     const order = {
       orderId,
       customer: {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        address: `${form.address.trim()}, ${form.city.trim()} - ${form.pincode.trim()}`,
-        notes: form.notes.trim(),
+        name:    form.name.trim(),
+        phone:   form.phone.trim(),
+        address: `${form.address.trim()}, ${form.city.trim()} — ${form.pincode.trim()}`,
+        notes:   form.notes.trim(),
       },
       items: cart.map((item) => ({
-        id: item.id,
-        name: item.name,
-        emoji: item.emoji,
-        price: item.price,
+        id:       item.id,
+        name:     item.name,
+        emoji:    item.emoji,
+        price:    item.price,
         quantity: item.quantity,
-        unit: item.unit,
+        unit:     item.unit,
       })),
-      total: finalTotal,
-      subtotal: totalPrice,
-      deliveryFee,
+      total:         finalTotal,
+      subtotal:      totalPrice,
+      deliveryFee:   slotFee,
+      deliverySlot:  activeSlot?.label,
       paymentMethod,
-      status: 'pending',
-      userEmail: user?.email || null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status:       'pending',
+      userEmail:    user?.email || null,
+      createdAt:    new Date().toISOString(),
+      updatedAt:    new Date().toISOString(),
     }
 
-    // Save order + update stock
     addOrder(order)
     cart.forEach((item) => decreaseStock(item.id, item.quantity))
-
     clearCart()
     setPlacing(false)
-    addToast('Order placed successfully! 🎉', 'success', 4000)
-    navigate(`/confirmation/${orderId}`)
+    addToast('Order placed successfully!', 'success', 4000)
+    navigate(`/track/${orderId}`)
   }
 
   return (
-    <div className="page-enter max-w-4xl mx-auto px-4 sm:px-6 py-8">
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Checkout</h1>
+    <div className="page-enter max-w-4xl mx-auto px-4 sm:px-6 py-8 pb-24 md:pb-8">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Checkout</h1>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-0 mb-8 mt-4">
-        {STEPS.map((label, i) => (
-          <React.Fragment key={label}>
+      <div className="flex items-center mb-8">
+        {STEPS.map((s, i) => (
+          <React.Fragment key={s.id}>
             <div className="flex flex-col items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-                  i < step
-                    ? 'bg-green-600 text-white'
-                    : i === step
-                    ? 'bg-green-600 text-white ring-4 ring-green-100'
-                    : 'bg-gray-100 text-gray-400'
-                }`}
-              >
-                {i < step ? '✓' : i + 1}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                s.id < step  ? 'bg-forest-500 text-white' :
+                s.id === step ? 'bg-forest-500 text-white ring-4 ring-forest-100' :
+                                'bg-gray-100 text-gray-400'
+              }`}>
+                {s.id < step ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : s.id}
               </div>
-              <span className={`text-xs mt-1 font-medium hidden sm:block ${i <= step ? 'text-green-700' : 'text-gray-400'}`}>
-                {label}
-              </span>
+              <span className={`text-xs mt-1 font-medium hidden sm:block ${s.id <= step ? 'text-forest-600' : 'text-gray-400'}`}>{s.label}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-1 transition-all duration-300 ${i < step ? 'bg-green-500' : 'bg-gray-200'}`} />
+              <div className={`flex-1 h-0.5 mx-2 transition-all duration-300 ${s.id < step ? 'bg-forest-500' : 'bg-gray-200'}`} />
             )}
           </React.Fragment>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content */}
-        <div className="lg:col-span-2">
-          {/* Step 1: Customer details */}
+        {/* Main */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* ── STEP 1: Delivery Info ── */}
           {step === 1 && (
             <div className="card p-6 animate-slide-up">
               <h2 className="font-bold text-gray-800 text-lg mb-5 flex items-center gap-2">
-                <span>👤</span> Delivery Details
+                <svg className="w-5 h-5 text-forest-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Delivery Information
               </h2>
               <div className="space-y-4">
-                <Field
-                  label="Full Name"
-                  placeholder="e.g. Priya Sharma"
-                  value={form.name}
-                  onChange={(v) => setForm({ ...form, name: v })}
-                  error={errors.name}
-                  required
-                />
-                <Field
-                  label="Mobile Number"
-                  placeholder="10-digit mobile number"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(v) => setForm({ ...form, phone: v })}
-                  error={errors.phone}
-                  required
-                  prefix="+91"
-                />
-                <Field
-                  label="Delivery Address"
-                  placeholder="House/Flat no., Street name, Locality"
-                  value={form.address}
-                  onChange={(v) => setForm({ ...form, address: v })}
-                  error={errors.address}
-                  required
-                  textarea
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    label="City"
-                    placeholder="e.g. Pune"
-                    value={form.city}
-                    onChange={(v) => setForm({ ...form, city: v })}
-                    error={errors.city}
-                    required
-                  />
-                  <Field
-                    label="Pincode"
-                    placeholder="6-digit pincode"
-                    value={form.pincode}
-                    onChange={(v) => setForm({ ...form, pincode: v })}
-                    error={errors.pincode}
-                    required
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Full Name" placeholder="e.g. Priya Sharma" value={form.name} onChange={(v) => setField('name', v)} error={errors.name} required />
+                  <Field label="Mobile Number" placeholder="10-digit number" type="tel" value={form.phone} onChange={(v) => setField('phone', v)} error={errors.phone} required prefix="+91" />
                 </div>
-                <Field
-                  label="Delivery Notes (optional)"
-                  placeholder="Any specific instructions for delivery..."
-                  value={form.notes}
-                  onChange={(v) => setForm({ ...form, notes: v })}
-                  textarea
-                />
+                <Field label="Delivery Address" placeholder="House no., Street, Locality" value={form.address} onChange={(v) => setField('address', v)} error={errors.address} required textarea />
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="City" placeholder="e.g. Hyderabad" value={form.city} onChange={(v) => setField('city', v)} error={errors.city} required />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="6-digit pincode"
+                        value={form.pincode}
+                        onChange={(e) => setField('pincode', e.target.value.replace(/\D/g, ''))}
+                        className={`input-field pr-10 ${errors.pincode ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : pincodeStatus === 'valid' ? 'border-forest-400 focus:border-forest-500' : ''}`}
+                      />
+                      {pincodeStatus === 'valid' && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-forest-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                      {pincodeStatus === 'invalid' && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-red-400 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    {pincodeStatus === 'valid' && (
+                      <p className="text-forest-600 text-xs mt-1 font-medium">Delivery available in your area!</p>
+                    )}
+                    {pincodeStatus === 'invalid' && (
+                      <p className="text-red-500 text-xs mt-1">Service not available in your location yet</p>
+                    )}
+                    {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
+                  </div>
+                </div>
+                <Field label="Delivery Notes (optional)" placeholder="Gate code, landmark, special instructions..." value={form.notes} onChange={(v) => setField('notes', v)} textarea />
               </div>
               <button onClick={handleNext} className="btn-primary w-full mt-6 flex items-center justify-center gap-2">
-                Continue to Payment <span>→</span>
+                Choose Delivery Slot
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
               </button>
             </div>
           )}
 
-          {/* Step 2: Payment */}
+          {/* ── STEP 2: Delivery Scheduling ── */}
           {step === 2 && (
             <div className="card p-6 animate-slide-up">
-              <h2 className="font-bold text-gray-800 text-lg mb-5 flex items-center gap-2">
-                <span>💳</span> Select Payment Method
+              <h2 className="font-bold text-gray-800 text-lg mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5 text-forest-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Choose Delivery Slot
               </h2>
+              <p className="text-sm text-gray-400 mb-5">Select when you'd like your order delivered</p>
 
               <div className="space-y-3 mb-6">
-                <PaymentOption
-                  id="cod"
-                  selected={paymentMethod === 'cod'}
-                  onSelect={() => setPaymentMethod('cod')}
-                  icon="💵"
-                  title="Cash on Delivery"
-                  subtitle="Pay in cash when your order arrives at your door"
-                />
-                <PaymentOption
-                  id="upi"
-                  selected={paymentMethod === 'upi'}
-                  onSelect={() => setPaymentMethod('upi')}
-                  icon="📱"
-                  title="UPI Payment"
-                  subtitle="Pay via UPI — PhonePe, GPay, Paytm, BHIM"
-                />
+                {DELIVERY_SLOTS.map((slot) => {
+                  const isAvailable = slot.available()
+                  const isSelected  = selectedSlot === slot.id
+                  const fee         = totalPrice >= FREE_DELIVERY_THRESHOLD ? 0 : slot.fee
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      disabled={!isAvailable}
+                      onClick={() => setSelectedSlot(slot.id)}
+                      className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        !isAvailable ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed' :
+                        isSelected   ? 'border-forest-500 bg-forest-50 shadow-sm' :
+                                       'border-gray-200 hover:border-forest-200 hover:bg-sage-50'
+                      }`}
+                    >
+                      <span className="text-3xl">{slot.icon}</span>
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-800 text-sm">{slot.label}</p>
+                        <p className="text-gray-400 text-xs mt-0.5">{slot.desc}</p>
+                        {!isAvailable && <p className="text-xs text-gray-400 mt-0.5">Not available right now</p>}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`text-sm font-bold ${fee === 0 ? 'text-forest-600' : 'text-gray-700'}`}>
+                          {fee === 0 ? 'FREE' : `+₹${fee}`}
+                        </p>
+                      </div>
+                      {isAvailable && (
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'border-forest-500 bg-forest-500' : 'border-gray-300'
+                        }`}>
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {totalPrice < FREE_DELIVERY_THRESHOLD && (
+                <div className="bg-earth-50 border border-earth-200 rounded-xl p-3 mb-4 flex items-start gap-2 text-sm">
+                  <span className="text-earth-500 flex-shrink-0">💡</span>
+                  <span className="text-earth-700">Add <strong>₹{FREE_DELIVERY_THRESHOLD - totalPrice}</strong> more to get free delivery on any slot!</span>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={handleBack} className="btn-secondary flex-1">← Back</button>
+                <button onClick={handleNext} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                  Choose Payment
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Payment ── */}
+          {step === 3 && (
+            <div className="card p-6 animate-slide-up">
+              <h2 className="font-bold text-gray-800 text-lg mb-5 flex items-center gap-2">
+                <svg className="w-5 h-5 text-forest-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                Payment Method
+              </h2>
+
+              <div className="space-y-3 mb-5">
+                <PaymentOption id="upi" selected={paymentMethod === 'upi'} onSelect={() => setPaymentMethod('upi')}
+                  icon={<UpiIcon />} title="UPI Payment" subtitle="PhonePe, GPay, Paytm, BHIM & more" recommended />
+                <PaymentOption id="cod" selected={paymentMethod === 'cod'} onSelect={() => setPaymentMethod('cod')}
+                  icon={<CodIcon />} title="Cash on Delivery" subtitle="Pay when your order arrives" />
+                <PaymentOption id="card" selected={paymentMethod === 'card'} onSelect={() => setPaymentMethod('card')}
+                  icon={<CardIcon />} title="Credit / Debit Card" subtitle="Secure payment via Razorpay" />
               </div>
 
               {paymentMethod === 'upi' && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 text-center border border-green-200 mb-4 animate-slide-up">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Pay to Raksha Farms</p>
-                  {/* QR code placeholder */}
-                  <div className="w-36 h-36 mx-auto bg-white rounded-xl border-2 border-green-300 flex flex-col items-center justify-center mb-3 shadow-sm">
-                    <span className="text-4xl">📱</span>
+                <div className="bg-forest-50 rounded-2xl p-5 text-center border border-forest-100 mb-4 animate-slide-up">
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Scan & Pay</p>
+                  <div className="w-36 h-36 mx-auto bg-white rounded-2xl border-2 border-forest-200 flex flex-col items-center justify-center mb-3 shadow-sm">
+                    <svg className="w-16 h-16 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
                     <span className="text-xs text-gray-400 mt-1">QR Code</span>
                   </div>
-                  <div className="flex items-center justify-center gap-2 bg-white rounded-xl px-4 py-2.5 border border-green-200 w-fit mx-auto">
-                    <span className="text-green-600 font-mono font-semibold text-sm">{OWNER_UPI_ID}</span>
+                  <div className="flex items-center justify-center gap-2 bg-white rounded-xl px-4 py-2.5 border border-forest-200 w-fit mx-auto shadow-sm">
+                    <span className="text-forest-600 font-mono font-bold text-sm">{OWNER_UPI_ID}</span>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(OWNER_UPI_ID)
-                        addToast('UPI ID copied!', 'success')
-                      }}
-                      className="text-gray-400 hover:text-green-600 transition-colors"
+                      onClick={() => { navigator.clipboard.writeText(OWNER_UPI_ID); addToast('UPI ID copied!', 'success') }}
+                      className="text-gray-400 hover:text-forest-600 transition-colors"
                       title="Copy UPI ID"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,82 +359,46 @@ export default function CheckoutPage() {
                       </svg>
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Complete payment and click "Place Order" to confirm
-                  </p>
+                  <p className="text-xs text-gray-400 mt-2">Complete payment, then click Place Order</p>
                 </div>
               )}
 
-              <div className="flex gap-3 mt-4">
-                <button onClick={() => setStep(1)} className="btn-secondary flex-1">
-                  ← Back
-                </button>
-                <button onClick={handleNext} className="btn-primary flex-1 flex items-center justify-center gap-2">
-                  Review Order →
-                </button>
-              </div>
-            </div>
-          )}
+              {paymentMethod === 'card' && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-sm text-blue-700 flex gap-2 animate-slide-up">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  You'll be redirected to Razorpay's secure payment gateway after placing the order.
+                </div>
+              )}
 
-          {/* Step 3: Review */}
-          {step === 3 && (
-            <div className="card p-6 animate-slide-up">
-              <h2 className="font-bold text-gray-800 text-lg mb-5 flex items-center gap-2">
-                <span>📋</span> Review Your Order
-              </h2>
-
-              {/* Customer summary */}
-              <div className="bg-green-50 rounded-xl p-4 mb-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold text-gray-800">{form.name}</p>
-                    <p className="text-sm text-gray-500">+91 {form.phone}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">{form.address}, {form.city} - {form.pincode}</p>
-                    {form.notes && <p className="text-xs text-gray-400 mt-1 italic">Note: {form.notes}</p>}
+              {/* Order review */}
+              <div className="bg-sage-50 rounded-xl p-4 mb-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Order Summary</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between text-gray-500">
+                    <span>Delivery to</span>
+                    <span className="font-medium text-gray-700 text-right max-w-[180px] truncate">{form.address}, {form.city}</span>
                   </div>
-                  <button onClick={() => setStep(1)} className="text-xs text-green-600 hover:underline">Edit</button>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Slot</span>
+                    <span className="font-medium text-gray-700">{activeSlot?.icon} {activeSlot?.label}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Payment</span>
+                    <span className="font-medium text-gray-700 capitalize">
+                      {paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'card' ? 'Card (Razorpay)' : 'UPI'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Items */}
-              <div className="space-y-2 mb-4">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-sm py-2 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span>{item.emoji}</span>
-                      <span className="text-gray-700">{item.name}</span>
-                      <span className="text-gray-400">× {item.quantity} {item.unit}</span>
-                    </div>
-                    <span className="font-semibold text-gray-800">₹{item.price * item.quantity}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Payment method */}
-              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 mb-2">
-                <span className="text-sm text-gray-600">Payment Method</span>
-                <span className="text-sm font-semibold text-gray-800">
-                  {paymentMethod === 'upi' ? '📱 UPI' : '💵 Cash on Delivery'}
-                </span>
-              </div>
-
-              {/* Order notice */}
-              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mt-4 flex items-start gap-3">
-                <span className="text-xl mt-0.5">✅</span>
-                <p className="text-xs text-green-800 leading-relaxed">
-                  Clicking "Place Order" will confirm your order online. Our team will contact you
-                  on <strong>+91 {form.phone}</strong> to confirm delivery time.
-                </p>
-              </div>
-
-              <div className="flex gap-3 mt-5">
-                <button onClick={() => setStep(2)} className="btn-secondary flex-1">
-                  ← Back
-                </button>
+              <div className="flex gap-3">
+                <button onClick={handleBack} className="btn-secondary flex-1">← Back</button>
                 <button
                   onClick={handlePlaceOrder}
                   disabled={placing}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2 bg-green-600"
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 bg-forest-500"
                 >
                   {placing ? (
                     <>
@@ -340,10 +406,10 @@ export default function CheckoutPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Placing...
+                      Placing Order...
                     </>
                   ) : (
-                    <>✅ Place Order</>
+                    <>Place Order · ₹{finalTotal}</>
                   )}
                 </button>
               </div>
@@ -351,19 +417,18 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {/* Order summary sidebar */}
+        {/* Sidebar: order summary */}
         <div className="lg:col-span-1">
           <div className="card p-5 sticky top-20">
-            <h3 className="font-bold text-gray-800 mb-3">Order Summary</h3>
-            <div className="space-y-2 text-sm mb-3 max-h-48 overflow-y-auto">
+            <h3 className="font-bold text-gray-800 mb-3 text-sm">Order Summary</h3>
+            <div className="space-y-2 text-sm mb-3 max-h-48 overflow-y-auto pr-1">
               {cart.map((item) => (
-                <div key={item.id} className="flex justify-between items-center text-gray-600">
-                  <span className="flex items-center gap-1.5">
-                    <span>{item.emoji}</span>
-                    <span className="truncate max-w-[110px]">{item.name}</span>
-                    <span className="text-gray-400 text-xs flex-shrink-0">×{item.quantity}</span>
-                  </span>
-                  <span className="flex-shrink-0">₹{item.price * item.quantity}</span>
+                <div key={item.cartKey} className="flex justify-between items-start gap-2 text-gray-600">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-gray-700 font-medium truncate block">{item.name}</span>
+                    <span className="text-gray-400 text-xs">{item.unit} ×{item.quantity}</span>
+                  </div>
+                  <span className="font-semibold flex-shrink-0">₹{item.price * item.quantity}</span>
                 </div>
               ))}
             </div>
@@ -373,12 +438,25 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-gray-500">
                 <span>Delivery</span>
-                <span>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span>
+                <span className={slotFee === 0 ? 'text-forest-600 font-semibold' : ''}>
+                  {slotFee === 0 ? 'FREE' : `₹${slotFee}`}
+                </span>
               </div>
               <div className="flex justify-between font-bold text-gray-800 text-base border-t pt-2">
                 <span>Total</span>
-                <span className="text-green-700">₹{finalTotal}</span>
+                <span className="text-forest-500">₹{finalTotal}</span>
               </div>
+            </div>
+            {/* Trust */}
+            <div className="mt-4 pt-3 border-t space-y-1.5">
+              {['Chemical-free guarantee', 'Same-day freshness', 'Secure checkout'].map((t) => (
+                <div key={t} className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <svg className="w-3.5 h-3.5 text-forest-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {t}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -387,6 +465,7 @@ export default function CheckoutPage() {
   )
 }
 
+/* ── Sub-components ── */
 function Field({ label, placeholder, value, onChange, error, required, textarea, type = 'text', prefix }) {
   const cls = `input-field ${error ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''} ${prefix ? 'pl-12' : ''}`
   return (
@@ -395,25 +474,11 @@ function Field({ label, placeholder, value, onChange, error, required, textarea,
         {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="relative">
-        {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">{prefix}</span>
-        )}
+        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium pointer-events-none">{prefix}</span>}
         {textarea ? (
-          <textarea
-            rows={3}
-            className={cls + ' resize-none'}
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-          />
+          <textarea rows={3} className={cls + ' resize-none'} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
         ) : (
-          <input
-            type={type}
-            className={cls}
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-          />
+          <input type={type} className={cls} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
         )}
       </div>
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
@@ -421,31 +486,47 @@ function Field({ label, placeholder, value, onChange, error, required, textarea,
   )
 }
 
-function PaymentOption({ id, selected, onSelect, icon, title, subtitle }) {
+function PaymentOption({ id, selected, onSelect, icon, title, subtitle, recommended }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <button type="button" onClick={onSelect}
       className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-        selected
-          ? 'border-green-500 bg-green-50 shadow-sm'
-          : 'border-gray-200 hover:border-green-200 hover:bg-green-50/50'
+        selected ? 'border-forest-500 bg-forest-50 shadow-sm' : 'border-gray-200 hover:border-forest-200 hover:bg-sage-50'
       }`}
     >
-      <span className="text-2xl">{icon}</span>
+      <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center flex-shrink-0">{icon}</div>
       <div className="flex-1">
-        <p className="font-semibold text-gray-800 text-sm">{title}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-semibold text-gray-800 text-sm">{title}</p>
+          {recommended && <span className="badge bg-earth-100 text-earth-600 text-[10px]">Recommended</span>}
+        </div>
         <p className="text-gray-400 text-xs mt-0.5">{subtitle}</p>
       </div>
-      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-        selected ? 'border-green-500 bg-green-500' : 'border-gray-300'
-      }`}>
-        {selected && (
-          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
+      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-forest-500 bg-forest-500' : 'border-gray-300'}`}>
+        {selected && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
       </div>
     </button>
+  )
+}
+
+function UpiIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+      <rect width="24" height="24" rx="4" fill="#6739B7" />
+      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold">UPI</text>
+    </svg>
+  )
+}
+function CodIcon() {
+  return (
+    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  )
+}
+function CardIcon() {
+  return (
+    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
   )
 }

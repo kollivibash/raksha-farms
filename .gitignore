@@ -1,4 +1,29 @@
-.DS_Store
+# Dependencies
 node_modules/
+
+# Environment files (never commit secrets)
 .env
+.env.local
+.env.production
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Build outputs
+frontend/dist/
+admin/.next/
+admin/out/
+
+# Claude worktrees (internal tooling)
+.claude/
+
+# Uploads (user-generated content, store on server)
+backend/src/uploads/
+
+# Misc
+*.zip
+raksha\ farms\ logo.zip

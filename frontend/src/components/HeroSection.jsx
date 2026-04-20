@@ -1,185 +1,111 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React from 'react'
+import { useScrollReveal } from '../hooks/useScrollReveal'
 
-function AnimatedCounter({ end, suffix = '', duration = 1800 }) {
-  const [count, setCount] = useState(0)
-  const [started, setStarted] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !started) {
-          setStarted(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.5 }
-    )
-    if (ref.current) observer.observe(ref.current)
-    return () => observer.disconnect()
-  }, [started])
-
-  useEffect(() => {
-    if (!started) return
-    let startTime = null
-    const step = (timestamp) => {
-      if (!startTime) startTime = timestamp
-      const progress = Math.min((timestamp - startTime) / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setCount(Math.floor(eased * end))
-      if (progress < 1) requestAnimationFrame(step)
-      else setCount(end)
-    }
-    requestAnimationFrame(step)
-  }, [started, end, duration])
-
-  return (
-    <span ref={ref} className="tabular-nums">
-      {count}{suffix}
-    </span>
-  )
-}
+const stats = [
+  { value: '500+', label: 'Happy Families' },
+  { value: '24h',  label: 'Farm to Fork' },
+  { value: '100%', label: 'Pesticide Free' },
+  { value: '4.9★', label: 'Customer Rating' },
+]
 
 const floatingItems = [
-  { emoji: '🌿', top: '10%',  left: '6%',  size: 'text-4xl', delay: '0s',   duration: '6s' },
-  { emoji: '🍅', top: '18%',  right: '8%', size: 'text-3xl', delay: '1s',   duration: '8s' },
-  { emoji: '🥕', bottom: '22%', left: '12%', size: 'text-3xl', delay: '2s', duration: '7s' },
-  { emoji: '🥦', bottom: '14%', right: '18%', size: 'text-4xl', delay: '0.5s', duration: '5s' },
-  { emoji: '🍎', top: '42%',  left: '42%', size: 'text-2xl', delay: '3s',   duration: '9s' },
-  { emoji: '🌾', top: '55%',  right: '5%', size: 'text-3xl', delay: '1.5s', duration: '6.5s' },
+  { img: 'https://images.unsplash.com/photo-1546470427-e26264be0b0d?w=80&h=80&fit=crop&q=80', alt: 'tomatoes', style: { top: '8%',    right: '10%', animationDelay: '0s',   animationDuration: '5s'   } },
+  { img: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=80&h=80&fit=crop&q=80', alt: 'apples',   style: { top: '30%',   right: '2%',  animationDelay: '1s',   animationDuration: '6.5s' } },
+  { img: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=80&h=80&fit=crop&q=80', alt: 'mangoes',  style: { bottom: '20%', right: '12%', animationDelay: '0.5s', animationDuration: '7s'   } },
+  { img: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=80&h=80&fit=crop&q=80', alt: 'banana', style: { top: '55%',  left: '3%',   animationDelay: '2s',   animationDuration: '5.5s' } },
+  { img: 'https://images.unsplash.com/photo-1474979078-6b1ae0b38025?w=80&h=80&fit=crop&q=80', alt: 'oil',      style: { top: '12%',   left: '5%',   animationDelay: '1.5s', animationDuration: '8s'   } },
 ]
 
 export default function HeroSection() {
+  useScrollReveal()
+
+  function scrollToProducts(e) {
+    e.preventDefault()
+    document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 min-h-[80vh] flex items-center">
-      {/* Animated background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-emerald-400/10 rounded-full blur-3xl" style={{ animation: 'floatSlow 12s ease-in-out infinite' }} />
-        <div className="absolute -bottom-24 -left-24 w-[400px] h-[400px] bg-green-300/10 rounded-full blur-3xl" style={{ animation: 'floatSlow 10s ease-in-out 2s infinite' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/3 rounded-full blur-3xl" />
+    <section className="relative overflow-hidden bg-hero-gradient min-h-[480px] md:min-h-[580px] flex items-center">
+      {/* Background blobs */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-earth-500/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-3xl" />
+        <div
+          className="absolute inset-0 opacity-5"
+          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}
+        />
       </div>
 
-      {/* Floating emojis */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
-        {floatingItems.map((item, i) => (
-          <span
-            key={i}
-            className={`absolute ${item.size} opacity-20`}
-            style={{
-              top: item.top,
-              left: item.left,
-              right: item.right,
-              bottom: item.bottom,
-              animation: `float ${item.duration} ease-in-out ${item.delay} infinite`,
-            }}
-          >
-            {item.emoji}
-          </span>
-        ))}
-      </div>
+      {/* Floating product images (desktop only) */}
+      {floatingItems.map((item) => (
+        <div key={item.alt} className="absolute hidden lg:block animate-float" style={item.style}>
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg border-2 border-white/30">
+            <img src={item.img} alt={item.alt} className="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+      ))}
 
-      {/* Dot grid pattern */}
-      <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-24">
         <div className="max-w-2xl">
-          {/* Live badge */}
-          <div className="inline-flex items-center gap-2.5 bg-white/15 backdrop-blur-sm text-white text-sm font-medium px-5 py-2 rounded-full mb-7 border border-white/25 shadow-sm">
-            <span className="pulse-dot w-2 h-2 bg-green-400 rounded-full" />
-            100% Organic & Natural — Hyderabad
+          {/* Live delivery badge */}
+          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/25 text-white text-xs font-semibold px-4 py-2 rounded-full mb-6 reveal">
+            <span className="w-2 h-2 rounded-full bg-earth-400 pulse-dot flex-shrink-0" />
+            Now delivering across Hyderabad
           </div>
 
           {/* Headline */}
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[1.08] mb-5 tracking-tight">
-            Fresh from Farm
-            <br />
-            <span className="shimmer-text">to Your Doorstep</span>{' '}
-            <span className="inline-block" style={{ animation: 'float 4s ease-in-out infinite' }}>🌿</span>
+          <h1 className="reveal delay-100 text-3xl sm:text-5xl md:text-6xl font-black text-white leading-[1.1] mb-4">
+            Farm-Fresh
+            <span className="block text-earth-400">Goodness,</span>
+            <span className="block">Delivered Daily</span>
           </h1>
 
-          {/* Sub-text */}
-          <p className="text-green-100 text-lg md:text-xl mb-9 leading-relaxed max-w-xl">
-            Order fresh vegetables, seasonal fruits, and daily groceries directly from
-            Raksha Farms. Hand-picked, pesticide-free, delivered the same day.
+          {/* Subheadline */}
+          <p className="reveal delay-200 text-white/80 text-sm md:text-xl mb-6 max-w-xl leading-relaxed">
+            Organic vegetables, fruits, millets & more — harvested at sunrise, at your door by noon. No chemicals, no cold storage.
           </p>
 
-          {/* CTAs */}
-          <div className="flex flex-wrap gap-4 mb-12">
+          {/* CTA buttons */}
+          <div className="reveal delay-300 flex flex-col sm:flex-row gap-3 mb-8">
             <a
               href="#products"
-              className="btn-ripple inline-flex items-center gap-2.5 bg-white text-green-700 font-bold px-8 py-4 rounded-2xl hover:bg-green-50 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 text-base"
+              onClick={scrollToProducts}
+              className="btn-ripple inline-flex items-center justify-center gap-2.5 bg-earth-500 hover:bg-earth-600 text-white font-bold px-8 py-4 rounded-2xl transition-all duration-200 shadow-earth text-base"
             >
-              <span className="text-xl">🛒</span> Shop Now
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 5M7 13l1.5 5m7-5l1.5 5M17 18a1 1 0 11-2 0 1 1 0 012 0zM9 18a1 1 0 11-2 0 1 1 0 012 0z" />
+              </svg>
+              Shop Now
             </a>
             <a
-              href="#categories"
-              className="btn-ripple inline-flex items-center gap-2.5 bg-white/15 backdrop-blur-sm text-white font-semibold px-8 py-4 rounded-2xl border border-white/30 hover:bg-white/25 transition-all duration-200 text-base"
+              href="tel:+919346566945"
+              className="inline-flex items-center justify-center gap-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/30 text-white font-bold px-8 py-4 rounded-2xl transition-all duration-200 text-base"
             >
-              <span className="text-xl">📦</span> View Categories
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+              Call to Order
             </a>
           </div>
 
-          {/* Trust badges */}
-          <div className="flex flex-wrap gap-6">
-            {[
-              { icon: '🌱', label: 'Zero Pesticides' },
-              { icon: '🚚', label: 'Same Day Delivery' },
-              { icon: '💯', label: 'Quality Guaranteed' },
-              { icon: '🤝', label: 'COD Available' },
-            ].map(({ icon, label }) => (
-              <div key={label} className="flex items-center gap-2 text-green-100 text-sm font-medium">
-                <span className="text-base">{icon}</span>
-                <span>{label}</span>
+          {/* Stats grid */}
+          <div className="reveal delay-400 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/15">
+                <p className="text-2xl font-black text-white leading-none">{s.value}</p>
+                <p className="text-white/70 text-xs mt-1 font-medium">{s.label}</p>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Animated stat counters — bottom right on large screens */}
-        <div className="mt-14 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl">
-          {[
-            { end: 500, suffix: '+', label: 'Happy Families' },
-            { end: 22, suffix: '+', label: 'Products' },
-            { end: 5, suffix: '★', label: 'Google Rating' },
-            { end: 100, suffix: '%', label: 'Organic' },
-          ].map(({ end, suffix, label }) => (
-            <div
-              key={label}
-              className="glass-card rounded-2xl px-4 py-4 text-center"
-            >
-              <div className="text-2xl md:text-3xl font-black text-green-700 mb-0.5">
-                <AnimatedCounter end={end} suffix={suffix} />
-              </div>
-              <div className="text-gray-500 text-xs font-medium">{label}</div>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* Wave bottom */}
-      <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-        <svg viewBox="0 0 1440 70" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full" preserveAspectRatio="none">
-          <path d="M0 70 L0 35 Q360 0 720 35 Q1080 70 1440 35 L1440 70 Z" fill="#f0fdf4" />
+      {/* Wave divider */}
+      <div className="absolute bottom-0 inset-x-0 pointer-events-none">
+        <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" className="w-full h-10 md:h-14">
+          <path d="M0 60L48 50C96 40 192 20 288 15C384 10 480 20 576 25C672 30 768 30 864 25C960 20 1056 10 1152 12.5C1248 15 1344 30 1392 37.5L1440 45V60H0Z" fill="#F0F4F1" />
         </svg>
       </div>
-
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          33%       { transform: translateY(-14px) rotate(4deg); }
-          66%       { transform: translateY(-7px) rotate(-3deg); }
-        }
-        @keyframes floatSlow {
-          0%, 100% { transform: translateY(0px) scale(1); }
-          50%       { transform: translateY(-20px) scale(1.05); }
-        }
-      `}</style>
     </section>
   )
 }
