@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { INITIAL_PRODUCTS } from '../data/products2'
 
-const API_URL = 'http://localhost:4000/api/products'
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const API_URL = `${BACKEND_URL}/api/products`
 
 const ProductsContext = createContext(null)
 
@@ -26,7 +27,7 @@ export function ProductsProvider({ children }) {
             unit:        p.unit || 'kg',
             stock:       Number(p.stock),
             image:       p.image_url
-              ? (p.image_url.startsWith('http') ? p.image_url : `http://localhost:4000${p.image_url}`)
+              ? (p.image_url.startsWith('http') ? p.image_url : `${BACKEND_URL}${p.image_url}`)
               : `https://images.pexels.com/photos/1300972/pexels-photo-1300972.jpeg?auto=compress&cs=tinysrgb&w=500`,
             featured:    p.is_featured || false,
             organic:     true,

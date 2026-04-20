@@ -82,7 +82,7 @@ export default function ProductsPage() {
               <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    {p.image_url && <img src={`http://localhost:4000${p.image_url}`} alt="" className="w-10 h-10 rounded-lg object-cover"/>}
+                    {p.image_url && <img src={`${process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/api','') : 'http://localhost:4000'}${p.image_url}`} alt="" className="w-10 h-10 rounded-lg object-cover"/>}
                     <div>
                       <p className="font-medium text-gray-900">{p.name}</p>
                       <p className="text-xs text-gray-400">{p.unit}</p>
