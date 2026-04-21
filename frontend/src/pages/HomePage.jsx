@@ -61,7 +61,10 @@ export default function HomePage() {
 
   function selectCategory(id) {
     setSearchParams(id !== 'all' ? { cat: id } : {})
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // Wait for React to re-render (categories section hides), then scroll to products
+    setTimeout(() => {
+      document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
   }
 
   function clearFilters() {
