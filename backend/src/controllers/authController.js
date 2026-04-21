@@ -10,6 +10,27 @@ function signToken(user) {
   )
 }
 
+export async function register(req, res) {
+  try {
+    const { name, email, password } = req.body
+    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+    const existing = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()])
+    if (existing.rows[0]) return res.status(409).json({ error: 'An account with this email already exists.' })
+
+    const hashed = await bcrypt.hash(password, 10)
+    const { rows } = await query(
+      `INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, 'user') RETURNING *`,
+      [name.trim(), email.toLowerCase(), hashed]
+    )
+    const token = signToken(rows[0])
+    res.status(201).json({ token, user: { id: rows[0].id, name: rows[0].name, email: rows[0].email, role: rows[0].role } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 export async function login(req, res) {
   try {
     const { email, password } = req.body
@@ -22,7 +43,7 @@ export async function login(req, res) {
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
 
-    if (user.role !== 'admin') return res.status(403).json({ error: 'Admin access only' })
+    if (user.role !== 'admin' && user.role !== 'user') return res.status(403).json({ error: 'Access denied' })
 
     const token = signToken(user)
     res.json({
