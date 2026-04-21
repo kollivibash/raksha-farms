@@ -60,14 +60,11 @@ export default function HomePage() {
   }, [products])
 
   function selectCategory(id) {
-    setActiveCategory(id)
-    setSearchParams({})
+    setSearchParams(id !== 'all' ? { cat: id } : {})
     document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function clearFilters() {
-    setSearchQuery('')
-    setActiveCategory('all')
     setSearchParams({})
   }
 
