@@ -30,7 +30,7 @@ export async function getProduct(req, res) {
 export async function createProduct(req, res) {
   try {
     const { name, category, description, price, stock, unit, variants, is_featured } = req.body
-    const image_url = req.file ? req.file.path : null   // Cloudinary returns full URL in req.file.path
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null
     const { rows } = await query(
       `INSERT INTO products (name, category, description, price, stock, unit, image_url, variants, is_featured)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
@@ -44,7 +44,7 @@ export async function createProduct(req, res) {
 export async function updateProduct(req, res) {
   try {
     const { name, category, description, price, stock, unit, variants, is_active, is_featured } = req.body
-    const image_url = req.file ? req.file.path : undefined  // Cloudinary returns full URL in req.file.path
+    const image_url = req.file ? `/uploads/${req.file.filename}` : undefined
     const fields = ['name','category','description','price','stock','unit','variants','is_active','is_featured']
     const values = [name, category, description, price, stock, unit,
                     JSON.stringify(variants || []), is_active, is_featured]

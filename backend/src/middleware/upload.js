@@ -1,22 +1,23 @@
 import multer from 'multer'
 import path from 'path'
-import { v2 as cloudinary } from 'cloudinary'
-import { CloudinaryStorage } from 'multer-storage-cloudinary'
+import { v4 as uuidv4 } from 'uuid'
+import fs from 'fs'
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
+// On Render: disk is mounted at /uploads
+// Locally: save to <project>/uploads
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder:         'raksha-farms/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 800, height: 800, crop: 'limit', quality: 'auto' }],
-  },
+// Create folder if it doesn't exist (local dev)
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    cb(null, `${uuidv4()}${ext}`)
+  }
 })
 
 const fileFilter = (req, file, cb) => {
