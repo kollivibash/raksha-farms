@@ -2,6 +2,38 @@ import { query } from '../config/database.js'
 
 const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled']
 
+export async function createOrder(req, res) {
+  try {
+    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes } = req.body
+    if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
+
+    // Build address JSONB from customer object
+    const address = {
+      name:    customer?.name    || '',
+      phone:   customer?.phone   || '',
+      address: customer?.address || '',
+      notes:   customer?.notes   || notes || '',
+      slot:    deliverySlot      || '',
+    }
+
+    const { rows } = await query(
+      `INSERT INTO orders (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes)
+       VALUES ($1, $2, $3, $4, $5, 'placed', $6, $7, $8) RETURNING *`,
+      [
+        req.user?.id || null,
+        JSON.stringify(items),
+        subtotal  || total,
+        deliveryFee || 0,
+        total,
+        paymentMethod || 'cod',
+        JSON.stringify(address),
+        customer?.notes || notes || '',
+      ]
+    )
+    res.status(201).json(rows[0])
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
 export async function getOrders(req, res) {
   try {
     const { status, page = 1, limit = 20, search } = req.query

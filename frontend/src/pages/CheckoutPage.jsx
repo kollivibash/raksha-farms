@@ -111,22 +111,24 @@ export default function CheckoutPage() {
   async function handlePlaceOrder() {
     setPlacing(true)
     const orderId = generateOrderId()
+    const customer = {
+      name:    form.name.trim(),
+      phone:   form.phone.trim(),
+      address: `${form.address.trim()}, ${form.city.trim()} — ${form.pincode.trim()}`,
+      notes:   form.notes.trim(),
+    }
+    const items = cart.map((item) => ({
+      id:       item.id,
+      name:     item.name,
+      emoji:    item.emoji,
+      price:    item.price,
+      quantity: item.quantity,
+      unit:     item.unit,
+    }))
     const order = {
       orderId,
-      customer: {
-        name:    form.name.trim(),
-        phone:   form.phone.trim(),
-        address: `${form.address.trim()}, ${form.city.trim()} — ${form.pincode.trim()}`,
-        notes:   form.notes.trim(),
-      },
-      items: cart.map((item) => ({
-        id:       item.id,
-        name:     item.name,
-        emoji:    item.emoji,
-        price:    item.price,
-        quantity: item.quantity,
-        unit:     item.unit,
-      })),
+      customer,
+      items,
       total:         finalTotal,
       subtotal:      totalPrice,
       deliveryFee:   slotFee,
@@ -136,6 +138,21 @@ export default function CheckoutPage() {
       userEmail:    user?.email || null,
       createdAt:    new Date().toISOString(),
       updatedAt:    new Date().toISOString(),
+    }
+
+    // Save to backend database (so admin can see it)
+    try {
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      const headers = { 'Content-Type': 'application/json' }
+      const token = localStorage.getItem('auth_token')
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      await fetch(`${BACKEND_URL}/api/orders`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label }),
+      })
+    } catch {
+      // Backend offline — order still saved locally
     }
 
     addOrder(order)
