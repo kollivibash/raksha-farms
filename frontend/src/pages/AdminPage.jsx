@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
+import { useOrders } from '../context/OrdersContext'
 import { CATEGORIES } from '../data/products2'
 
 // Password is stored only in env/config — never shown as a hint in UI
@@ -146,19 +147,29 @@ function normalizeOrder(row) {
 
 function OrdersPanel() {
   const { addToast } = useToast()
-  const [orders, setOrders]       = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [fetchError, setFetchError] = useState(null)
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [dateFilter, setDateFilter]     = useState('all')
-  const [searchQuery, setSearchQuery]   = useState('')
+  const { orders: localOrders, updateOrderStatus: updateLocalStatus } = useOrders()
+  const [backendOrders, setBackendOrders] = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [fetchError, setFetchError]       = useState(null)
+  const [filterStatus, setFilterStatus]   = useState('all')
+  const [dateFilter, setDateFilter]       = useState('all')
+  const [searchQuery, setSearchQuery]     = useState('')
   const [deliveryTimeInputs, setDeliveryTimeInputs] = useState({})
 
-  // Get the best available auth token: stored JWT → admin secret fallback
+  // Merge backend orders + localStorage orders, deduplicating by orderId
+  const orders = React.useMemo(() => {
+    const map = new Map()
+    // Backend orders take priority
+    backendOrders.forEach(o => map.set(o.orderId, o))
+    // Add localStorage orders that aren't already in backend
+    localOrders.forEach(o => { if (!map.has(o.orderId)) map.set(o.orderId, o) })
+    return Array.from(map.values())
+  }, [backendOrders, localOrders])
+
+  // Get admin JWT: try stored → try login → fallback
   async function getAdminToken() {
     const stored = sessionStorage.getItem('rf_admin_token')
     if (stored) return stored
-    // No JWT stored — try to get one now (handles page refresh)
     for (const pwd of [ADMIN_PASSWORD, 'password']) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
@@ -173,7 +184,7 @@ function OrdersPanel() {
         }
       } catch {}
     }
-    return ADMIN_PASSWORD // last resort: try adminSecret middleware
+    return ADMIN_PASSWORD
   }
 
   const fetchOrders = useCallback(async () => {
@@ -186,9 +197,10 @@ function OrdersPanel() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Server error ${res.status}`)
-      setOrders((data.orders || []).map(normalizeOrder))
+      setBackendOrders((data.orders || []).map(normalizeOrder))
     } catch (err) {
       setFetchError(err.message)
+      // Backend fetch failed — localStorage orders still shown
     } finally {
       setLoading(false)
     }
@@ -231,21 +243,25 @@ function OrdersPanel() {
   async function handleStatusUpdate(orderId, status) {
     const order = orders.find((o) => o.orderId === orderId)
     if (!order) return
-    const reverseMap = { rejected: 'cancelled' }
-    const backendStatus = reverseMap[status] || status
-    try {
-      const token = await getAdminToken()
-      const res = await fetch(`${BACKEND_URL}/api/orders/${order.dbId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: backendStatus }),
-      })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Update failed') }
-      setOrders((prev) => prev.map((o) => o.orderId === orderId ? { ...o, status } : o))
-      addToast(`Order ${orderId} → ${status.replace(/_/g, ' ')}`, 'success')
-    } catch (err) {
-      addToast(err.message || 'Failed to update status', 'error')
+    // Update localStorage order immediately (works always)
+    updateLocalStatus(orderId, status)
+    // Also update backend if this is a backend order (has dbId)
+    if (order.dbId) {
+      const reverseMap = { rejected: 'cancelled' }
+      const backendStatus = reverseMap[status] || status
+      try {
+        const token = await getAdminToken()
+        const res = await fetch(`${BACKEND_URL}/api/orders/${order.dbId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: backendStatus }),
+        })
+        if (res.ok) {
+          setBackendOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o))
+        }
+      } catch {}
     }
+    addToast(`Order ${orderId} → ${status.replace(/_/g, ' ')}`, 'success')
   }
 
   if (loading) {
