@@ -103,7 +103,7 @@ export default function HomePage() {
                 <button
                   key={cat.id}
                   onClick={() => selectCategory(cat.id)}
-                  className={`reveal category-card delay-${(i + 1) * 100} relative overflow-hidden rounded-2xl p-4 text-left transition-all duration-300 ${
+                  className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all duration-300 ${
                     isActive ? 'ring-4 ring-forest-400 ring-offset-2 shadow-forest' : 'shadow-card hover:shadow-soft'
                   }`}
                 >
