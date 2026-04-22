@@ -61,8 +61,13 @@ app.use('/api/customers',     customersRoutes)
 app.use('/api/coupons',       couponsRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', env: process.env.NODE_ENV }))
+// Health check — includes build date so we can confirm Render deployed latest code
+app.get('/health', (req, res) => res.json({
+  status:    'ok',
+  env:       process.env.NODE_ENV,
+  version:   '2026-04-22-v2',   // bump this on every deploy to verify new code is live
+  routes:    ['POST /api/orders', 'GET /api/orders', 'PATCH /api/orders/:id/status'],
+}))
 
 // Error handler
 app.use((err, req, res, next) => {
