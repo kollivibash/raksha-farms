@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import React, { useState, useMemo } from 'react'
 import HeroSection from '../components/HeroSection'
 import WhyChooseUs from '../components/WhyChooseUs'
 import HowItWorks from '../components/HowItWorks'
@@ -13,20 +12,11 @@ import { useScrollReveal } from '../hooks/useScrollReveal'
 
 export default function HomePage() {
   useScrollReveal()
-  const [searchParams, setSearchParams] = useSearchParams()
   const { products } = useProducts()
 
-  const [activeCategory, setActiveCategory] = useState(searchParams.get('cat') || 'all')
-  const [searchQuery, setSearchQuery]       = useState(searchParams.get('q')   || '')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [searchQuery, setSearchQuery]       = useState('')
   const [sortBy, setSortBy]                 = useState('default')
-
-  // Sync URL search param → state
-  useEffect(() => {
-    const q   = searchParams.get('q')   || ''
-    const cat = searchParams.get('cat') || 'all'
-    setSearchQuery(q)
-    setActiveCategory(cat)
-  }, [searchParams])
 
   const filteredProducts = useMemo(() => {
     let list = [...products]
@@ -60,15 +50,16 @@ export default function HomePage() {
   }, [products])
 
   function selectCategory(id) {
-    setSearchParams(id !== 'all' ? { cat: id } : {})
-    // Wait for React to re-render (categories section hides), then scroll to products
+    setActiveCategory(id)
+    setSearchQuery('')
     setTimeout(() => {
       document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 50)
   }
 
   function clearFilters() {
-    setSearchParams({})
+    setActiveCategory('all')
+    setSearchQuery('')
   }
 
   return (
@@ -147,7 +138,7 @@ export default function HomePage() {
                 type="text"
                 placeholder="Search vegetables, fruits, oils, millets..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setSearchParams({}) }}
+                onChange={(e) => { setSearchQuery(e.target.value) }}
                 className="input-field pl-10"
               />
             </div>
