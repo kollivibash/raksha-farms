@@ -1,7 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['localhost', 'raksha-farms.onrender.com'],
+    remotePatterns: [
+      { protocol: 'http',  hostname: 'localhost' },
+      { protocol: 'https', hostname: 'raksha-farms.onrender.com' },
+    ],
   },
 }
 module.exports = nextConfig
