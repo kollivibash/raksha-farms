@@ -1,6 +1,6 @@
 import { query } from '../config/database.js'
 
-const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled']
+const VALID_STATUSES = ['placed','pending','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 
 export async function createOrder(req, res) {
   try {

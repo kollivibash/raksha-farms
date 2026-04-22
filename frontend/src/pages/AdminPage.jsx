@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { useOrders } from '../context/OrdersContext'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { CATEGORIES } from '../data/products2'
 
 // Password is stored only in env/config — never shown as a hint in UI
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'raksha@admin2024'
+const BACKEND_URL    = import.meta.env.VITE_API_URL        || 'http://localhost:4000'
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(() => sessionStorage.getItem('rf_admin') === 'true')
@@ -101,13 +101,59 @@ export default function AdminPage() {
 }
 
 /* ── ORDERS PANEL ─────────────────────────────────────────────────────── */
+// Normalize a backend DB row into the shape OrderCard expects
+function normalizeOrder(row) {
+  const addr  = row.address  || {}
+  const items = Array.isArray(row.items) ? row.items : []
+  // Backend uses 'placed' → show as 'pending'; 'cancelled' → show as 'rejected'
+  const statusMap = { placed: 'pending', cancelled: 'rejected' }
+  return {
+    orderId:       `#${row.id}`,
+    dbId:          row.id,
+    customer: {
+      name:    addr.name    || row.customer_name  || 'Guest',
+      phone:   addr.phone   || row.customer_phone || '',
+      address: addr.address || '',
+      notes:   addr.notes   || row.notes          || '',
+    },
+    items,
+    total:         Number(row.total)        || 0,
+    subtotal:      Number(row.subtotal)     || 0,
+    deliveryFee:   Number(row.delivery_fee) || 0,
+    deliverySlot:  addr.slot        || '',
+    paymentMethod: row.payment_method || 'cod',
+    status:        statusMap[row.status] || row.status,
+    createdAt:     row.created_at,
+    updatedAt:     row.updated_at,
+  }
+}
+
 function OrdersPanel() {
-  const { orders, updateOrderStatus } = useOrders()
   const { addToast } = useToast()
+  const [orders, setOrders]   = useState([])
+  const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
   const [dateFilter, setDateFilter]     = useState('all')
   const [searchQuery, setSearchQuery]   = useState('')
   const [deliveryTimeInputs, setDeliveryTimeInputs] = useState({})
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/orders?limit=500`, {
+        headers: { Authorization: `Bearer ${ADMIN_PASSWORD}` },
+      })
+      if (!res.ok) throw new Error('Fetch failed')
+      const data = await res.json()
+      setOrders((data.orders || []).map(normalizeOrder))
+    } catch {
+      addToast('Could not load orders from server', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchOrders() }, [fetchOrders])
 
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const weekStart = new Date(today); weekStart.setDate(today.getDate() - 6)
@@ -141,10 +187,36 @@ function OrdersPanel() {
   }
   filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
-  function handleStatusUpdate(orderId, status) {
-    const deliveryTime = deliveryTimeInputs[orderId] || null
-    updateOrderStatus(orderId, status, deliveryTime)
-    addToast(`Order #${orderId.slice(-6)} → ${status.replace(/_/g, ' ')}`, 'success')
+  async function handleStatusUpdate(orderId, status) {
+    const order = orders.find((o) => o.orderId === orderId)
+    if (!order) return
+    // Map frontend status names back to backend names
+    const reverseMap = { rejected: 'cancelled' }
+    const backendStatus = reverseMap[status] || status
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/orders/${order.dbId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_PASSWORD}` },
+        body: JSON.stringify({ status: backendStatus }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Update failed') }
+      setOrders((prev) => prev.map((o) => o.orderId === orderId ? { ...o, status } : o))
+      addToast(`Order ${orderId} → ${status.replace(/_/g, ' ')}`, 'success')
+    } catch (err) {
+      addToast(err.message || 'Failed to update status', 'error')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        <svg className="animate-spin w-8 h-8 text-forest-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <p className="text-gray-400 text-sm">Loading orders…</p>
+      </div>
+    )
   }
 
   return (
@@ -174,6 +246,10 @@ function OrdersPanel() {
             </button>
           ))}
         </div>
+        <button onClick={fetchOrders}
+          className="flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold bg-forest-50 text-forest-600 hover:bg-forest-100 border border-forest-200 transition-all">
+          🔄 Refresh
+        </button>
       </div>
 
       {/* Status pills */}
@@ -191,8 +267,8 @@ function OrdersPanel() {
       {filtered.length === 0 ? (
         <div className="text-center py-16 card">
           <p className="text-4xl mb-3">📭</p>
-          <p className="text-gray-400 font-medium">No orders match your filters</p>
-          <button onClick={()=>{setFilterStatus('all');setDateFilter('all');setSearchQuery('')}} className="btn-outline mt-3 text-sm">Clear Filters</button>
+          <p className="text-gray-400 font-medium">{orders.length === 0 ? 'No orders yet' : 'No orders match your filters'}</p>
+          {orders.length > 0 && <button onClick={()=>{setFilterStatus('all');setDateFilter('all');setSearchQuery('')}} className="btn-outline mt-3 text-sm">Clear Filters</button>}
         </div>
       ) : (
         <div className="space-y-3">
