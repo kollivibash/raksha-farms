@@ -7,9 +7,16 @@ import fs from 'fs'
 // Locally: save to <project>/uploads
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
 
-// Create folder if it doesn't exist (local dev)
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+// Create upload folder if it doesn't exist.
+// Wrapped in try/catch so a missing Render disk (EACCES on /var/data/*)
+// never crashes the server — image uploads just fail gracefully instead.
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+  }
+} catch (err) {
+  console.warn(`⚠ Could not create upload dir "${UPLOAD_DIR}": ${err.message}`)
+  console.warn('  Remove the UPLOAD_DIR env var on Render if no disk is mounted.')
 }
 
 const storage = multer.diskStorage({
