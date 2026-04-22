@@ -4,7 +4,7 @@ node_modules/
 # Environment files (never commit secrets)
 .env
 .env.local
-.env.production
+# .env.production is intentionally tracked — only contains public VITE_/NEXT_PUBLIC_ vars (no secrets)
 
 # Logs
 *.log
