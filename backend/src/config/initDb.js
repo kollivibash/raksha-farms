@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { query } from './database.js'
 
 // Called automatically on server startup — safe to run multiple times (IF NOT EXISTS)
@@ -94,13 +95,16 @@ export async function initDb() {
       )
     `)
 
-    // Create default admin user (safe — ON CONFLICT does nothing)
-    await query(`
-      INSERT INTO users (name, email, phone, password, role)
-      VALUES ('Admin', 'admin@rakshafarms.in', '9346566945',
-              '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin')
-      ON CONFLICT (email) DO NOTHING
-    `)
+    // Upsert admin user and sync password with ADMIN_SECRET env var
+    // This ensures the backend admin password always matches the frontend VITE_ADMIN_PASSWORD
+    const adminSecret = process.env.ADMIN_SECRET || 'raksha@admin2024'
+    const hashed = await bcrypt.hash(adminSecret, 10)
+    await query(
+      `INSERT INTO users (name, email, phone, password, role)
+       VALUES ('Admin', 'admin@rakshafarms.in', '9346566945', $1, 'admin')
+       ON CONFLICT (email) DO UPDATE SET password = $1`,
+      [hashed]
+    )
 
     console.log('✅ DB tables verified')
   } catch (err) {

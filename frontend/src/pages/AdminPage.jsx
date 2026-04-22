@@ -13,11 +13,27 @@ export default function AdminPage() {
   const [pwError, setPwError] = useState(false)
   const [activeTab, setActiveTab] = useState('orders')
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault()
     if (pwInput === ADMIN_PASSWORD) {
       sessionStorage.setItem('rf_admin', 'true')
       setAuthenticated(true)
+      // Also get a backend JWT so the Orders panel can fetch from the database.
+      // Try the entered password first, then the default 'password' from migration.
+      for (const pwd of [pwInput, 'password']) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'admin@rakshafarms.in', password: pwd }),
+          })
+          const data = await res.json()
+          if (res.ok && data.token && data.user?.role === 'admin') {
+            sessionStorage.setItem('rf_admin_token', data.token)
+            break
+          }
+        } catch {}
+      }
     } else {
       setPwError(true)
       setPwInput('')
@@ -138,12 +154,35 @@ function OrdersPanel() {
   const [searchQuery, setSearchQuery]   = useState('')
   const [deliveryTimeInputs, setDeliveryTimeInputs] = useState({})
 
+  // Get the best available auth token: stored JWT → admin secret fallback
+  async function getAdminToken() {
+    const stored = sessionStorage.getItem('rf_admin_token')
+    if (stored) return stored
+    // No JWT stored — try to get one now (handles page refresh)
+    for (const pwd of [ADMIN_PASSWORD, 'password']) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'admin@rakshafarms.in', password: pwd }),
+        })
+        const data = await res.json()
+        if (res.ok && data.token && data.user?.role === 'admin') {
+          sessionStorage.setItem('rf_admin_token', data.token)
+          return data.token
+        }
+      } catch {}
+    }
+    return ADMIN_PASSWORD // last resort: try adminSecret middleware
+  }
+
   const fetchOrders = useCallback(async () => {
     setLoading(true)
     setFetchError(null)
     try {
+      const token = await getAdminToken()
       const res = await fetch(`${BACKEND_URL}/api/orders?limit=500`, {
-        headers: { Authorization: `Bearer ${ADMIN_PASSWORD}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Server error ${res.status}`)
@@ -192,13 +231,13 @@ function OrdersPanel() {
   async function handleStatusUpdate(orderId, status) {
     const order = orders.find((o) => o.orderId === orderId)
     if (!order) return
-    // Map frontend status names back to backend names
     const reverseMap = { rejected: 'cancelled' }
     const backendStatus = reverseMap[status] || status
     try {
+      const token = await getAdminToken()
       const res = await fetch(`${BACKEND_URL}/api/orders/${order.dbId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_PASSWORD}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: backendStatus }),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Update failed') }
