@@ -126,6 +126,30 @@ export default function HomePage() {
       {/* ── Products section ── */}
       <section id="products" className="py-8 bg-sage-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+          {/* Category pills — always visible above products for easy switching */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-5">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => selectCategory(cat.id)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all border ${
+                  activeCategory === cat.id
+                    ? 'bg-forest-600 text-white border-forest-600 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-forest-400'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                {cat.label}
+                {categoryCounts[cat.id] > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    activeCategory === cat.id ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}>{categoryCounts[cat.id]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
           {/* Search + sort bar */}
           <div className="flex flex-col sm:flex-row gap-3 mb-5 reveal">
             <div className="relative flex-1">
