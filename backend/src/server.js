@@ -70,8 +70,10 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
 })
 
-// Auto-create DB tables on startup (safe — uses IF NOT EXISTS)
-initDb().then(() => {
-  app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`))
+// Start server immediately so Render doesn't time out waiting for DB
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on http://localhost:${PORT}`)
+  // Init DB tables in background after server starts
+  initDb().catch(err => console.error('initDb error:', err.message))
 })
 export default app
