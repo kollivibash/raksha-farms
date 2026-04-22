@@ -3,8 +3,10 @@ services:
     name: raksha-farms-backend
     runtime: node
     rootDir: backend
+    branch: master
     buildCommand: npm install
     startCommand: npm start
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production

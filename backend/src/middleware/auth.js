@@ -1,5 +1,4 @@
 import jwt from 'jsonwebtoken'
-import { query } from '../config/database.js'
 
 export function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization
