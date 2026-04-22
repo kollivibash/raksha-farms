@@ -146,13 +146,19 @@ export default function CheckoutPage() {
       const headers = { 'Content-Type': 'application/json' }
       const token = localStorage.getItem('auth_token')
       if (token) headers['Authorization'] = `Bearer ${token}`
-      await fetch(`${BACKEND_URL}/api/orders`, {
+      const backendRes = await fetch(`${BACKEND_URL}/api/orders`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label }),
       })
-    } catch {
-      // Backend offline — order still saved locally
+      if (!backendRes.ok) {
+        const errData = await backendRes.json().catch(() => ({}))
+        console.error('Backend order save failed:', errData)
+        addToast(`⚠ Order saved locally but server sync failed: ${errData.error || backendRes.status}`, 'error', 6000)
+      }
+    } catch (err) {
+      console.error('Backend order save error:', err)
+      addToast('⚠ Could not sync order to server — check your internet connection', 'error', 6000)
     }
 
     addOrder(order)

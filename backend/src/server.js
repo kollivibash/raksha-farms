@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 
 dotenv.config()
 
+import { initDb } from './config/initDb.js'
 import authRoutes          from './routes/auth.js'
 import productsRoutes      from './routes/products.js'
 import ordersRoutes        from './routes/orders.js'
@@ -69,5 +70,8 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
 })
 
-app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`))
+// Auto-create DB tables on startup (safe — uses IF NOT EXISTS)
+initDb().then(() => {
+  app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`))
+})
 export default app

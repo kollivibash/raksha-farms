@@ -130,8 +130,9 @@ function normalizeOrder(row) {
 
 function OrdersPanel() {
   const { addToast } = useToast()
-  const [orders, setOrders]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [orders, setOrders]       = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [dateFilter, setDateFilter]     = useState('all')
   const [searchQuery, setSearchQuery]   = useState('')
@@ -139,15 +140,16 @@ function OrdersPanel() {
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
     try {
       const res = await fetch(`${BACKEND_URL}/api/orders?limit=500`, {
         headers: { Authorization: `Bearer ${ADMIN_PASSWORD}` },
       })
-      if (!res.ok) throw new Error('Fetch failed')
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Server error ${res.status}`)
       setOrders((data.orders || []).map(normalizeOrder))
-    } catch {
-      addToast('Could not load orders from server', 'error')
+    } catch (err) {
+      setFetchError(err.message)
     } finally {
       setLoading(false)
     }
@@ -221,6 +223,15 @@ function OrdersPanel() {
 
   return (
     <div className="animate-slide-up">
+      {/* Error banner — shown when backend fetch fails */}
+      {fetchError && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+          <p className="font-bold mb-1">⚠ Could not load orders from server</p>
+          <p className="text-xs text-red-500 mb-1">Connecting to: <code className="bg-red-100 px-1 rounded">{BACKEND_URL}</code></p>
+          <p className="text-xs text-red-500">Error: {fetchError}</p>
+          <button onClick={fetchOrders} className="mt-2 text-xs font-semibold underline">Try again</button>
+        </div>
+      )}
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard icon="💰" label="Total Revenue"  value={`₹${totalRevenue.toLocaleString('en-IN')}`} color="text-forest-600" highlight />
