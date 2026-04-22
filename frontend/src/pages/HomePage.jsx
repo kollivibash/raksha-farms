@@ -52,9 +52,7 @@ export default function HomePage() {
   function selectCategory(id) {
     setActiveCategory(id)
     setSearchQuery('')
-    setTimeout(() => {
-      document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 50)
+    document.getElementById('products')?.scrollIntoView({ behavior: 'instant', block: 'start' })
   }
 
   function clearFilters() {
@@ -68,8 +66,8 @@ export default function HomePage() {
       <TrustBadges />
       <FreeDeliveryBar />
 
-      {/* ── Category grid — hidden when a category is active so products are immediately visible ── */}
-      <section id="categories" className={`py-10 bg-sage-50 transition-all duration-300 ${activeCategory !== 'all' ? 'hidden' : ''}`}>
+      {/* ── Category grid ── */}
+      <section id="categories" className="py-10 bg-sage-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-7 reveal">
             <span className="section-subtitle">Browse</span>
