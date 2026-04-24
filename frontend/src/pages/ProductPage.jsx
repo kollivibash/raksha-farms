@@ -33,6 +33,7 @@ export default function ProductPage() {
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [qty, setQty] = useState(1)
   const [notified, setNotified] = useState(false)
+  const [imgError, setImgError] = useState(false)
 
   const activePrice = selectedVariant?.price ?? product?.price
   const activeUnit  = selectedVariant?.label ?? product?.unit
@@ -88,8 +89,8 @@ export default function ProductPage() {
         {/* Image */}
         <div className="relative">
           <div className="aspect-square rounded-3xl overflow-hidden bg-sage-50 shadow-soft">
-            {product.image ? (
-              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+            {product.image && !imgError ? (
+              <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-8xl">{product.emoji || '🌿'}</div>
             )}

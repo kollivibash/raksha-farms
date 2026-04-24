@@ -23,6 +23,7 @@ import ProductPage          from './pages/ProductPage'
 import WishlistPage         from './pages/WishlistPage'
 import ProfilePage          from './pages/ProfilePage'
 import OrderTrackingPage    from './pages/OrderTrackingPage'
+import NotFoundPage         from './pages/NotFoundPage'
 
 function RequireAuth({ children }) {
   const { isLoggedIn } = useAuth()
@@ -59,7 +60,7 @@ export default function App() {
                         <Route path="/my-orders"      element={<RequireAuth><MyOrdersPage /></RequireAuth>} />
                         <Route path="/profile"        element={<RequireAuth><ProfilePage /></RequireAuth>} />
                         <Route path="/admin"          element={<AdminPage />} />
-                        <Route path="*"               element={<Navigate to="/" replace />} />
+                        <Route path="*"               element={<NotFoundPage />} />
                       </Routes>
                     </main>
                     <Footer />

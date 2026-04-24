@@ -59,11 +59,12 @@ export function OrdersProvider({ children }) {
     return orders.filter((o) => !o.userEmail || o.userEmail.toLowerCase() === email.toLowerCase())
   }
 
-  // Merge backend orders into localStorage — works for ALL order types
+  // Merge backend orders into localStorage — updates existing AND restores cleared history
   function applyBackendOrders(backendOrders) {
     if (!backendOrders?.length) return
     setOrders(prev => {
       let changed = false
+      // Step 1: update statuses of existing local orders
       const next = prev.map(order => {
         const match = backendOrders.find(b =>
           (b.reference_id && b.reference_id === order.orderId) ||
@@ -76,6 +77,29 @@ export function OrdersProvider({ children }) {
         changed = true
         return { ...order, status: newStatus, backendId: match.id, updatedAt: new Date().toISOString() }
       })
+      // Step 2: add backend orders not present locally (restores cleared localStorage)
+      const localIds  = new Set(next.map(o => o.backendId).filter(Boolean))
+      const localRefs = new Set(next.map(o => o.orderId).filter(Boolean))
+      const missing = backendOrders.filter(b => !localIds.has(b.id) && !localRefs.has(b.reference_id))
+      if (missing.length) {
+        changed = true
+        const restored = missing.map(b => {
+          const addr = typeof b.address === 'string' ? (() => { try { return JSON.parse(b.address) } catch { return {} } })() : (b.address || {})
+          return {
+            orderId:       b.reference_id || b.id,
+            backendId:     b.id,
+            status:        STATUS_MAP[b.status] || b.status,
+            total:         Number(b.total),
+            deliveryFee:   Number(b.delivery_fee || 0),
+            items:         Array.isArray(b.items) ? b.items : (() => { try { return JSON.parse(b.items || '[]') } catch { return [] } })(),
+            customer:      addr,
+            paymentMethod: b.payment_method,
+            createdAt:     b.created_at,
+            updatedAt:     b.created_at,
+          }
+        })
+        return [...restored, ...next]
+      }
       return changed ? next : prev
     })
   }

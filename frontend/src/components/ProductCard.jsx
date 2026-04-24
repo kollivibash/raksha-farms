@@ -34,6 +34,7 @@ export default function ProductCard({ product }) {
   const [adding, setAdding]               = useState(false)
   const [wishlisting, setWishlisting]     = useState(false)
   const [notifySubmitted, setNotifySubmitted] = useState(false)
+  const [imgError, setImgError]           = useState(false)
 
   const [selectedVariant, setSelectedVariant] = useState(
     product.variants ? product.variants[0] : null
@@ -92,12 +93,13 @@ export default function ProductCard({ product }) {
     <div className={`card group flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-soft active:scale-[0.98] ${isOutOfStock ? 'opacity-80' : ''}`}>
       {/* Image */}
       <Link to={`/product/${product.id}`} className="block relative overflow-hidden bg-sage-50 h-36 sm:h-44">
-        {product.image ? (
+        {product.image && !imgError ? (
           <img
             src={product.image}
             alt={product.name}
             className={`w-full h-full object-cover transition-transform duration-500 ${!isOutOfStock ? 'group-hover:scale-110' : ''}`}
             loading="lazy"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-sage-50 to-sage-100">
