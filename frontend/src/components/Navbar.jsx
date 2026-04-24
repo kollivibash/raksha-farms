@@ -139,7 +139,7 @@ export default function Navbar() {
                   </svg>
                   <span className="hidden sm:inline">Cart</span>
                   {totalItems > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-earth-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-fade-in">
+                    <span className="absolute -top-2.5 -right-2.5 bg-red-500 text-white text-[11px] font-black rounded-full min-w-[22px] h-[22px] px-1 flex items-center justify-center ring-2 ring-white shadow-md animate-fade-in z-10">
                       {totalItems > 99 ? '99+' : totalItems}
                     </span>
                   )}
