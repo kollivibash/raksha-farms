@@ -1,17 +1,21 @@
 import { Router } from 'express'
-import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats } from '../controllers/ordersController.js'
+import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder } from '../controllers/ordersController.js'
 import { adminSecret, verifyToken } from '../middleware/auth.js'
-const r = Router()
-r.post('/', (req, res, next) => {
-  // Optional auth — logged-in users get their user_id attached, guests pass through
+
+// Optional auth middleware — attaches user if token present, otherwise continues
+function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization
   if (authHeader?.startsWith('Bearer ')) {
     return verifyToken(req, res, next)
   }
   next()
-}, createOrder)
+}
+
+const r = Router()
+r.post('/', optionalAuth, createOrder)
 r.get('/', adminSecret, getOrders)
 r.get('/stats', adminSecret, getOrderStats)
+r.get('/track/:id', optionalAuth, trackOrder)   // User-facing status poll
 r.get('/:id', adminSecret, getOrder)
 r.patch('/:id/status', adminSecret, updateOrderStatus)
 export default r

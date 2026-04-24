@@ -48,8 +48,8 @@ async function migrate() {
         delivery_fee    DECIMAL(10,2) DEFAULT 0,
         discount        DECIMAL(10,2) DEFAULT 0,
         total           DECIMAL(10,2) NOT NULL,
-        status          VARCHAR(20) DEFAULT 'placed'
-                        CHECK (status IN ('placed','accepted','preparing','out_for_delivery','delivered','cancelled')),
+        status          VARCHAR(30) DEFAULT 'placed'
+                        CHECK (status IN ('placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected')),
         payment_method  VARCHAR(20) DEFAULT 'cod',
         payment_status  VARCHAR(20) DEFAULT 'pending',
         address         JSONB,

@@ -11,7 +11,7 @@ export default function LoginPage() {
   const googleBtnRef = useRef(null)
 
   const [tab, setTab] = useState('login')          // 'login' | 'signup'
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
+  const [form, setForm] = useState({ name: '', emailOrPhone: '', email: '', phone: '', password: '', confirm: '' })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -35,8 +35,13 @@ export default function LoginPage() {
 
   function validateLogin() {
     const errs = {}
-    if (!form.email.trim()) errs.email = 'Email is required'
-    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email'
+    const id = form.emailOrPhone.trim()
+    if (!id) errs.emailOrPhone = 'Email or mobile number is required'
+    else {
+      const isPhone = /^[+\d]/.test(id) && !id.includes('@')
+      if (!isPhone && !/\S+@\S+\.\S+/.test(id)) errs.emailOrPhone = 'Enter a valid email or 10-digit mobile number'
+      if (isPhone && id.replace(/\D/g, '').length < 10) errs.emailOrPhone = 'Enter a valid 10-digit mobile number'
+    }
     if (!form.password) errs.password = 'Password is required'
     return errs
   }
@@ -46,6 +51,7 @@ export default function LoginPage() {
     if (!form.name.trim()) errs.name = 'Full name is required'
     if (!form.email.trim()) errs.email = 'Email is required'
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email'
+    if (form.phone && form.phone.replace(/\D/g, '').length !== 10) errs.phone = 'Enter a valid 10-digit mobile number'
     if (!form.password) errs.password = 'Password is required'
     else if (form.password.length < 6) errs.password = 'Minimum 6 characters'
     if (form.password !== form.confirm) errs.confirm = 'Passwords do not match'
@@ -60,10 +66,10 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       if (tab === 'login') {
-        await loginWithEmail(form.email, form.password)
+        await loginWithEmail(form.emailOrPhone.trim(), form.password)
         addToast('Welcome back! 🌿', 'success')
       } else {
-        await signupWithEmail(form.name, form.email, form.password)
+        await signupWithEmail(form.name, form.email, form.password, form.phone)
         addToast('Account created! Welcome to Raksha Farms 🌿', 'success')
       }
       navigate(from, { replace: true })
@@ -158,15 +164,38 @@ export default function LoginPage() {
               />
             )}
 
-            <AuthField
-              label="Email Address"
-              type="email"
-              placeholder="you@example.com"
-              value={form.email}
-              onChange={(v) => update('email', v)}
-              error={errors.email}
-              icon="📧"
-            />
+            {tab === 'login' ? (
+              <AuthField
+                label="Email or Mobile Number"
+                type="text"
+                placeholder="you@example.com  or  9876543210"
+                value={form.emailOrPhone}
+                onChange={(v) => update('emailOrPhone', v)}
+                error={errors.emailOrPhone}
+                icon="📱"
+              />
+            ) : (
+              <>
+                <AuthField
+                  label="Email Address"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={(v) => update('email', v)}
+                  error={errors.email}
+                  icon="📧"
+                />
+                <AuthField
+                  label="Mobile Number (optional)"
+                  type="tel"
+                  placeholder="10-digit number"
+                  value={form.phone}
+                  onChange={(v) => update('phone', v)}
+                  error={errors.phone}
+                  icon="📱"
+                />
+              </>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">

@@ -1,9 +1,16 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function Footer() {
+  const navigate = useNavigate()
+
+  function goToCategory(catId) {
+    navigate(`/?category=${catId}`)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
-    <footer className="bg-green-950 text-green-100">
+    <footer className="bg-green-950 text-green-100 pb-20 md:pb-0">
       {/* Top wave */}
       <div className="bg-white">
         <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
@@ -70,15 +77,19 @@ export default function Footer() {
             <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-widest">Categories</h4>
             <ul className="space-y-2.5 text-sm">
               {[
-                { label: '🥦 Vegetables', href: '/#categories' },
-                { label: '🍎 Fruits', href: '/#categories' },
-                { label: '🌾 Groceries', href: '/#categories' },
-                { label: '🫙 Cold-Pressed Oils', href: '/#categories' },
-              ].map(({ label, href }) => (
-                <li key={label}>
-                  <a href={href} className="text-green-400 hover:text-white transition-colors duration-200 font-medium">
+                { label: '🥦 Vegetables',       id: 'vegetables' },
+                { label: '🍎 Fruits',            id: 'fruits'     },
+                { label: '🌾 Whole Grains',      id: 'grains'     },
+                { label: '🫙 Wood-Pressed Oils', id: 'oils'       },
+                { label: '🌱 Microgreens',       id: 'microgreens'},
+              ].map(({ label, id }) => (
+                <li key={id}>
+                  <button
+                    onClick={() => goToCategory(id)}
+                    className="text-green-400 hover:text-white transition-colors duration-200 font-medium text-left"
+                  >
                     {label}
-                  </a>
+                  </button>
                 </li>
               ))}
             </ul>

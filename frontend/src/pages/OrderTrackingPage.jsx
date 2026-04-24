@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useOrders } from '../context/OrdersContext'
 
@@ -17,10 +17,46 @@ const STATUS_INDEX = {
   rejected:         -1,
 }
 
+// Maps backend statuses to the frontend status keys used in STATUS_INDEX
+const BACKEND_TO_FRONTEND = {
+  placed:            'pending',
+  accepted:          'accepted',
+  preparing:         'accepted',   // show as Confirmed while preparing
+  out_for_delivery:  'out_for_delivery',
+  delivered:         'delivered',
+  cancelled:         'rejected',
+  rejected:          'rejected',
+}
+
 export default function OrderTrackingPage() {
   const { orderId } = useParams()
-  const { orders }  = useOrders()
+  const { orders, updateOrderStatus } = useOrders()
   const order = orders.find((o) => o.orderId === orderId)
+
+  // Poll backend every 30 s for live status updates
+  useEffect(() => {
+    if (!order?.backendId) return
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+    async function poll() {
+      try {
+        const headers = {}
+        const token = localStorage.getItem('auth_token')
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`${BACKEND_URL}/api/orders/track/${order.backendId}`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        const frontendStatus = BACKEND_TO_FRONTEND[data.status] ?? data.status
+        if (frontendStatus && frontendStatus !== order.status) {
+          updateOrderStatus(orderId, frontendStatus)
+        }
+      } catch { /* network error — silently ignore */ }
+    }
+
+    poll() // immediate first check
+    const interval = setInterval(poll, 30_000)
+    return () => clearInterval(interval)
+  }, [order?.backendId, order?.status, orderId, updateOrderStatus])
 
   if (!order) {
     return (

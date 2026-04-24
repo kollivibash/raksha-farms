@@ -247,8 +247,8 @@ function OrdersPanel() {
     updateLocalStatus(orderId, status)
     // Also update backend if this is a backend order (has dbId)
     if (order.dbId) {
-      const reverseMap = { rejected: 'cancelled' }
-      const backendStatus = reverseMap[status] || status
+      // 'rejected' is now a valid backend status — send it directly
+      const backendStatus = status
       try {
         const token = await getAdminToken()
         const res = await fetch(`${BACKEND_URL}/api/orders/${order.dbId}/status`, {

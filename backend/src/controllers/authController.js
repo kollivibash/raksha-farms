@@ -12,7 +12,7 @@ function signToken(user) {
 
 export async function register(req, res) {
   try {
-    const { name, email, password } = req.body
+    const { name, email, phone, password } = req.body
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password required' })
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
 
@@ -21,11 +21,11 @@ export async function register(req, res) {
 
     const hashed = await bcrypt.hash(password, 10)
     const { rows } = await query(
-      `INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, 'user') RETURNING *`,
-      [name.trim(), email.toLowerCase(), hashed]
+      `INSERT INTO users (name, email, phone, password, role) VALUES ($1, $2, $3, $4, 'user') RETURNING *`,
+      [name.trim(), email.toLowerCase(), phone?.trim() || null, hashed]
     )
     const token = signToken(rows[0])
-    res.status(201).json({ token, user: { id: rows[0].id, name: rows[0].name, email: rows[0].email, role: rows[0].role } })
+    res.status(201).json({ token, user: { id: rows[0].id, name: rows[0].name, email: rows[0].email, phone: rows[0].phone, role: rows[0].role } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -33,10 +33,18 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   try {
-    const { email, password } = req.body
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+    const { email, phone, password } = req.body
+    if ((!email && !phone) || !password) return res.status(400).json({ error: 'Email/phone and password required' })
 
-    const { rows } = await query('SELECT * FROM users WHERE email = $1', [email])
+    // Accept login by email or phone
+    let rows
+    if (email) {
+      ({ rows } = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]))
+    } else {
+      // phone login — strip non-digit chars and match last 10 digits
+      const digits = phone.replace(/\D/g, '').slice(-10)
+      ;({ rows } = await query("SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone,'\\D','','g'),10) = $1", [digits]))
+    }
     const user = rows[0]
     if (!user) return res.status(401).json({ error: 'Invalid credentials' })
 

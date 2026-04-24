@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD } from '../utils/constants'
 import { SERVICEABLE_PINCODES } from '../data/products2'
-import { generateOrderId } from '../utils/whatsapp'
+import { generateOrderId, openWhatsApp } from '../utils/whatsapp'
 
 const STEPS = [
   { id: 1, label: 'Delivery'  },
@@ -26,15 +26,23 @@ export default function CheckoutPage() {
   const [step, setStep]   = useState(1)
   const [placing, setPlacing] = useState(false)
 
-  // Step 1 form
-  const [form, setForm] = useState({
-    name:    user?.name  || '',
-    phone:   '',
-    address: '',
-    city:    '',
-    pincode: '',
-    notes:   '',
-    saveAddress: false,
+  // Step 1 form — pre-fill from user profile or last saved address
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rf_saved_address')
+      const addr  = saved ? JSON.parse(saved) : {}
+      return {
+        name:        user?.name     || addr.name    || '',
+        phone:       user?.phone    || addr.phone   || '',
+        address:     addr.address   || '',
+        city:        addr.city      || '',
+        pincode:     addr.pincode   || '',
+        notes:       '',
+        saveAddress: false,
+      }
+    } catch {
+      return { name: user?.name || '', phone: user?.phone || '', address: '', city: '', pincode: '', notes: '', saveAddress: false }
+    }
   })
   const [errors, setErrors] = useState({})
   const [pincodeStatus, setPincodeStatus] = useState(null) // 'valid' | 'invalid' | null
@@ -140,7 +148,8 @@ export default function CheckoutPage() {
       updatedAt:    new Date().toISOString(),
     }
 
-    // Save to backend database (so admin can see it)
+    // Save to backend database (so admin can see it and status can be polled)
+    let backendId = null
     try {
       const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
       const headers = { 'Content-Type': 'application/json' }
@@ -151,7 +160,10 @@ export default function CheckoutPage() {
         headers,
         body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label }),
       })
-      if (!backendRes.ok) {
+      if (backendRes.ok) {
+        const data = await backendRes.json()
+        backendId = data.id || null   // UUID from DB — used for live status polling
+      } else {
         const errData = await backendRes.json().catch(() => ({}))
         console.error('Backend order save failed:', errData)
         addToast(`⚠ Order saved locally but server sync failed: ${errData.error || backendRes.status}`, 'error', 6000)
@@ -161,11 +173,32 @@ export default function CheckoutPage() {
       addToast('⚠ Could not sync order to server — check your internet connection', 'error', 6000)
     }
 
-    addOrder(order)
+    // Save address for next order
+    localStorage.setItem('rf_saved_address', JSON.stringify({
+      name:    form.name.trim(),
+      phone:   form.phone.trim(),
+      address: form.address.trim(),
+      city:    form.city.trim(),
+      pincode: form.pincode.trim(),
+    }))
+
+    addOrder({ ...order, backendId })
     cart.forEach((item) => decreaseStock(item.id, item.quantity))
     clearCart()
     setPlacing(false)
-    addToast('Order placed successfully!', 'success', 4000)
+
+    // Notify admin via WhatsApp
+    openWhatsApp({
+      customer,
+      items: cart.map((item) => ({
+        name: item.name, price: item.price, quantity: item.quantity, unit: item.unit,
+      })),
+      total: finalTotal,
+      paymentMethod,
+      orderId,
+    })
+
+    addToast('Order placed! Admin notified via WhatsApp 🎉', 'success', 5000)
     navigate(`/track/${orderId}`)
   }
 
@@ -417,7 +450,12 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={handleBack} className="btn-secondary flex-1">← Back</button>
+                <button onClick={handleBack} className="btn-secondary flex-1 flex items-center justify-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
                 <button
                   onClick={handlePlaceOrder}
                   disabled={placing}
@@ -432,7 +470,7 @@ export default function CheckoutPage() {
                       Placing Order...
                     </>
                   ) : (
-                    <>Place Order · ₹{finalTotal}</>
+                    <>Place Order ₹{finalTotal}</>
                   )}
                 </button>
               </div>

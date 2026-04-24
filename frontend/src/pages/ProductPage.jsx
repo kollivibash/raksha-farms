@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useProducts } from '../context/ProductsContext'
 import { useCart } from '../context/CartContext'
@@ -25,6 +25,9 @@ export default function ProductPage() {
   const { cart, addToCart, updateQuantity, openDrawer } = useCart()
   const { isWishlisted, toggleWishlist } = useWishlist()
   const { addToast } = useToast()
+
+  // Scroll to top whenever the product id changes
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [id])
 
   const product = products.find((p) => p.id === id)
   const [selectedVariant, setSelectedVariant] = useState(null)

@@ -70,14 +70,14 @@ export function AuthProvider({ children }) {
     }
   }, [googleReady])
 
-  // ─── Email Sign Up → saves to backend database ─────────────────────
-  async function signupWithEmail(name, email, password) {
+  // ─── Email/Phone Sign Up → saves to backend database ──────────────
+  async function signupWithEmail(name, email, password, phone = '') {
     setLoading(true)
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, phone: phone || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Signup failed')
@@ -90,14 +90,19 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // ─── Email Login → validates against backend database ──────────────
-  async function loginWithEmail(email, password) {
+  // ─── Email or Phone Login → validates against backend database ─────
+  async function loginWithEmail(emailOrPhone, password) {
     setLoading(true)
     try {
+      // Detect if the identifier looks like a phone number (digits / starts with +91)
+      const isPhone = /^[+\d]/.test(emailOrPhone) && !/[@]/.test(emailOrPhone)
+      const body = isPhone
+        ? { phone: emailOrPhone, password }
+        : { email: emailOrPhone, password }
       const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Login failed')

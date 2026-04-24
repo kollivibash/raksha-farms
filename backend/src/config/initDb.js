@@ -95,6 +95,23 @@ export async function initDb() {
       )
     `)
 
+    // Ensure orders.status allows 'rejected' (old DBs had a CHECK without it)
+    await query(`
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check
+    `).catch(() => {}) // ignore if constraint doesn't exist
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'orders_status_check' AND conrelid = 'orders'::regclass
+        ) THEN
+          ALTER TABLE orders ADD CONSTRAINT orders_status_check
+            CHECK (status IN ('placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected'));
+        END IF;
+      END $$
+    `).catch(() => {}) // non-fatal if constraint already has right values
+
     // Upsert admin user and sync password with ADMIN_SECRET env var
     // This ensures the backend admin password always matches the frontend VITE_ADMIN_PASSWORD
     const adminSecret = process.env.ADMIN_SECRET || 'raksha@admin2024'

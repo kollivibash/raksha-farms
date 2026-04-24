@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HeroSection from '../components/HeroSection'
 import WhyChooseUs from '../components/WhyChooseUs'
 import HowItWorks from '../components/HowItWorks'
@@ -13,8 +14,20 @@ import { useScrollReveal } from '../hooks/useScrollReveal'
 export default function HomePage() {
   useScrollReveal()
   const { products } = useProducts()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [activeCategory, setActiveCategory] = useState('all')
+
+  // Sync active category from URL param (e.g. Footer links use ?category=vegetables)
+  useEffect(() => {
+    const cat = searchParams.get('category')
+    if (cat) {
+      setActiveCategory(cat)
+      setSearchParams({}, { replace: true }) // clean URL after applying
+      // Small delay so the products section renders before we scroll
+      setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+    }
+  }, [searchParams, setSearchParams])
   const [searchQuery, setSearchQuery]       = useState('')
   const [sortBy, setSortBy]                 = useState('default')
 
