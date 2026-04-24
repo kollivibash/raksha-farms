@@ -103,7 +103,7 @@ export default function HeroSection() {
                 </div>
               </div>
 
-              {/* Orbit cards */}
+              {/* Orbit cards — uniform animation keeps circle alignment */}
               {products.map((p, i) => {
                 const angle = (i / products.length) * 2 * Math.PI - Math.PI / 2
                 const r = 155
@@ -116,8 +116,8 @@ export default function HeroSection() {
                       left: `calc(50% + ${x}px)`,
                       top: `calc(50% + ${y}px)`,
                       transform: 'translate(-50%, -50%)',
-                      animationDelay: `${i * 0.4}s`,
-                      animationDuration: `${5 + i * 0.5}s`,
+                      animationDelay: `${i * 0.3}s`,
+                      animationDuration: '6s',
                     }}>
                     <div className={`w-[72px] h-[72px] rounded-2xl ${p.color} border ${p.border} backdrop-blur-sm flex flex-col items-center justify-center gap-1 shadow-lg hover:scale-110 transition-transform cursor-default`}>
                       <span className="text-2xl">{p.emoji}</span>
@@ -126,9 +126,6 @@ export default function HeroSection() {
                   </div>
                 )
               })}
-
-              {/* Orbit ring */}
-              <div className="absolute inset-0 rounded-full border border-white/10" />
             </div>
           </div>
 
