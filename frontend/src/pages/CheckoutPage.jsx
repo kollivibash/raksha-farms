@@ -117,6 +117,12 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
+    // Stock validation before placing
+    const outOfStock = cart.filter(item => item.stock === 0 || item.quantity > item.stock)
+    if (outOfStock.length) {
+      addToast(`❌ ${outOfStock.map(i => i.name).join(', ')} — insufficient stock`, 'error', 5000)
+      return
+    }
     setPlacing(true)
     const orderId = generateOrderId()
     const customer = {
@@ -162,15 +168,17 @@ export default function CheckoutPage() {
       })
       if (backendRes.ok) {
         const data = await backendRes.json()
-        backendId = data.id || null   // UUID from DB — used for live status polling
+        backendId = data.id || null
       } else {
         const errData = await backendRes.json().catch(() => ({}))
-        console.error('Backend order save failed:', errData)
-        addToast(`⚠ Order saved locally but server sync failed: ${errData.error || backendRes.status}`, 'error', 6000)
+        setPlacing(false)
+        addToast(`❌ Order failed: ${errData.error || 'Server error'}. Please try again.`, 'error', 7000)
+        return
       }
-    } catch (err) {
-      console.error('Backend order save error:', err)
-      addToast('⚠ Could not sync order to server — check your internet connection', 'error', 6000)
+    } catch {
+      setPlacing(false)
+      addToast('❌ Cannot reach server. Check your internet and try again.', 'error', 7000)
+      return
     }
 
     // Save address for next order

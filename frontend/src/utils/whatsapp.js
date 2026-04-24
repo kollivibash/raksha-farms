@@ -20,7 +20,7 @@ export function generateOrderId() {
   const hh   = String(d.getHours()).padStart(2, '0')
   const min  = String(d.getMinutes()).padStart(2, '0')
   const ss   = String(d.getSeconds()).padStart(2, '0')
-  return `RF-${dd}-${mm}-${yyyy}-${hh}:${min}:${ss}-${_nextSeq()}`
+  return `RF-${dd}-${mm}-${yyyy}-${hh}${min}${ss}-${_nextSeq()}`
 }
 
 export function generateWhatsAppMessage(order) {

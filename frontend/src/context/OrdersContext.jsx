@@ -53,9 +53,10 @@ export function OrdersProvider({ children }) {
     return orders.find((o) => o.orderId === orderId)
   }
 
+  // Show ALL local orders for logged-in users (email match + no-email guest orders)
   function getOrdersByUser(email) {
-    if (!email) return []
-    return orders.filter((o) => o.userEmail?.toLowerCase() === email.toLowerCase())
+    if (!email) return orders
+    return orders.filter((o) => !o.userEmail || o.userEmail.toLowerCase() === email.toLowerCase())
   }
 
   // Merge backend orders into localStorage — works for ALL order types

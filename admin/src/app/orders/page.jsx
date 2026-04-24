@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import StatusBadge from '../../components/StatusBadge'
 import { ordersAPI } from '../../lib/api'
@@ -84,8 +84,8 @@ export default function OrdersPage() {
                 const isOpen = selected === o.id
                 const addr   = typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {})
                 return (
-                  <>
-                    <tr key={o.id}
+                  <React.Fragment key={o.id}>
+                    <tr
                       onClick={() => setSelected(isOpen ? null : o.id)}
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer select-none"
                       title="Click to view order details">
@@ -111,9 +111,8 @@ export default function OrdersPage() {
                       <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
                     </tr>
 
-                    {/* Expandable detail row */}
                     {isOpen && (
-                      <tr key={`${o.id}-detail`} className="bg-green-50 border-b border-gray-100">
+                      <tr className="bg-green-50 border-b border-gray-100">
                         <td colSpan={7} className="px-6 py-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             {/* Items */}
@@ -147,7 +146,7 @@ export default function OrdersPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>
