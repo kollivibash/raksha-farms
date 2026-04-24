@@ -33,19 +33,37 @@ export default function OrderTrackingPage() {
   const { orders, updateOrderStatus } = useOrders()
   const order = orders.find((o) => o.orderId === orderId)
 
-  // Poll backend every 30 s for live status updates
+  // Poll backend every 30 s for live status updates.
+  // Uses backendId (DB UUID) if available, otherwise falls back to the
+  // RF-... reference ID so ALL orders — including older ones — stay in sync.
   useEffect(() => {
-    if (!order?.backendId) return
+    if (!order) return
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
     async function poll() {
       try {
-        const headers = {}
+        let url, headers = {}
         const token = localStorage.getItem('auth_token')
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        const res = await fetch(`${BACKEND_URL}/api/orders/track/${order.backendId}`, { headers })
+
+        if (order.backendId) {
+          // Primary: poll by DB UUID (authenticated)
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          url = `${BACKEND_URL}/api/orders/track/${order.backendId}`
+        } else {
+          // Fallback: poll by RF-... reference ID (no auth needed)
+          url = `${BACKEND_URL}/api/orders/track-ref/${encodeURIComponent(order.orderId)}`
+        }
+
+        const res = await fetch(url, { headers })
         if (!res.ok) return
         const data = await res.json()
+
+        // Save the backend DB id for future polls (faster path)
+        if (data.id && !order.backendId) {
+          updateOrderStatus(orderId, BACKEND_TO_FRONTEND[data.status] ?? data.status, null, data.id)
+          return
+        }
+
         const frontendStatus = BACKEND_TO_FRONTEND[data.status] ?? data.status
         if (frontendStatus && frontendStatus !== order.status) {
           updateOrderStatus(orderId, frontendStatus)
@@ -56,7 +74,7 @@ export default function OrderTrackingPage() {
     poll() // immediate first check
     const interval = setInterval(poll, 30_000)
     return () => clearInterval(interval)
-  }, [order?.backendId, order?.status, orderId, updateOrderStatus])
+  }, [order?.backendId, order?.orderId, order?.status, orderId, updateOrderStatus])
 
   if (!order) {
     return (

@@ -20,7 +20,7 @@ export function OrdersProvider({ children }) {
     setOrders((prev) => [order, ...prev])
   }
 
-  function updateOrderStatus(orderId, status, deliveryTime = null) {
+  function updateOrderStatus(orderId, status, deliveryTime = null, backendId = null) {
     setOrders((prev) =>
       prev.map((o) =>
         o.orderId === orderId
@@ -28,6 +28,7 @@ export function OrdersProvider({ children }) {
               ...o,
               status,
               ...(deliveryTime ? { deliveryTime } : {}),
+              ...(backendId   ? { backendId }   : {}),
               updatedAt: new Date().toISOString(),
             }
           : o

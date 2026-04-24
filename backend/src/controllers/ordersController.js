@@ -4,7 +4,7 @@ const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','deli
 
 export async function createOrder(req, res) {
   try {
-    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes } = req.body
+    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId } = req.body
     if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
 
     // Build address JSONB from customer object
@@ -17,8 +17,8 @@ export async function createOrder(req, res) {
     }
 
     const { rows } = await query(
-      `INSERT INTO orders (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes)
-       VALUES ($1, $2, $3, $4, $5, 'placed', $6, $7, $8) RETURNING *`,
+      `INSERT INTO orders (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes, reference_id)
+       VALUES ($1, $2, $3, $4, $5, 'placed', $6, $7, $8, $9) RETURNING *`,
       [
         req.user?.id || null,
         JSON.stringify(items),
@@ -28,6 +28,7 @@ export async function createOrder(req, res) {
         paymentMethod || 'cod',
         JSON.stringify(address),
         customer?.notes || notes || '',
+        referenceId || null,
       ]
     )
     res.status(201).json(rows[0])
@@ -77,18 +78,29 @@ export async function updateOrderStatus(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// User-facing status poll — no admin needed, but order must belong to the caller
+// User-facing status poll by DB UUID — no admin needed
 export async function trackOrder(req, res) {
   try {
     const { rows } = await query(
-      `SELECT id, status, updated_at, created_at FROM orders WHERE id=$1`,
+      `SELECT id, user_id, status, updated_at FROM orders WHERE id=$1`,
       [req.params.id]
     )
     if (!rows[0]) return res.status(404).json({ error: 'Order not found' })
-    // If user is authenticated, verify the order belongs to them
     if (req.user?.id && rows[0].user_id && rows[0].user_id !== req.user.id) {
       return res.status(403).json({ error: 'Forbidden' })
     }
+    res.json({ id: rows[0].id, status: rows[0].status, updatedAt: rows[0].updated_at })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+// User-facing status poll by frontend reference ID (RF-dd-mm-yyyy-...) — no auth needed
+export async function trackOrderByRef(req, res) {
+  try {
+    const { rows } = await query(
+      `SELECT id, status, updated_at FROM orders WHERE reference_id=$1`,
+      [req.params.ref]
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Order not found' })
     res.json({ id: rows[0].id, status: rows[0].status, updatedAt: rows[0].updated_at })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }

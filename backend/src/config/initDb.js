@@ -95,6 +95,11 @@ export async function initDb() {
       )
     `)
 
+    // Add reference_id column if it doesn't exist (stores the frontend RF-... order ID)
+    await query(`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)
+    `).catch(() => {})
+
     // Ensure orders.status allows 'rejected' (old DBs had a CHECK without it)
     await query(`
       ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check

@@ -65,7 +65,7 @@ app.use('/api/subscriptions', subscriptionsRoutes)
 app.get('/health', (req, res) => res.json({
   status:    'ok',
   env:       process.env.NODE_ENV,
-  version:   '2026-04-24-v3',   // bump this on every deploy to verify new code is live
+  version:   '2026-04-24-v4',   // bump this on every deploy to verify new code is live
   features:  ['orders', 'order-tracking', 'rejected-status', 'user-block'],
 }))
 
