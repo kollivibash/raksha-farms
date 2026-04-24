@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useOrders } from '../context/OrdersContext'
@@ -13,11 +13,17 @@ const STATUS_STYLES = {
 
 export default function MyOrdersPage() {
   const { user, logout } = useAuth()
-  const { getOrdersByUser } = useOrders()
+  const { getOrdersByUser, syncOrdersByPhone } = useOrders()
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
 
   const allOrders = getOrdersByUser(user?.email)
+
+  // Sync all order statuses from backend on every page visit
+  useEffect(() => {
+    const phone = user?.phone || allOrders[0]?.customer?.phone
+    if (phone) syncOrdersByPhone(phone)
+  }, [user?.phone]) // eslint-disable-line
   const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
 
   const counts = allOrders.reduce((acc, o) => {

@@ -1,4 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+// Maps backend status → frontend status used in the UI
+const STATUS_MAP = {
+  placed:           'pending',
+  accepted:         'accepted',
+  preparing:        'accepted',
+  out_for_delivery: 'out_for_delivery',
+  delivered:        'delivered',
+  cancelled:        'rejected',
+  rejected:         'rejected',
+}
 
 const OrdersContext = createContext(null)
 
@@ -45,8 +58,40 @@ export function OrdersProvider({ children }) {
     return orders.filter((o) => o.userEmail?.toLowerCase() === email.toLowerCase())
   }
 
+  // Fetch live statuses from backend by phone and sync localStorage.
+  // Works for ALL orders (old and new) — no backendId or reference_id required.
+  const syncOrdersByPhone = useCallback(async (phone) => {
+    if (!phone) return
+    const digits = phone.replace(/\D/g, '').slice(-10)
+    if (digits.length < 8) return
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/orders/by-phone/${digits}`)
+      if (!res.ok) return
+      const backendOrders = await res.json()   // [{id, reference_id, status, total, created_at}]
+      if (!backendOrders.length) return
+
+      setOrders(prev => {
+        let changed = false
+        const next = prev.map(order => {
+          // Match by reference_id (new orders) or by total + date proximity (old orders)
+          const match = backendOrders.find(b =>
+            (b.reference_id && b.reference_id === order.orderId) ||
+            (Math.abs(Number(b.total) - Number(order.total)) < 1 &&
+             Math.abs(new Date(b.created_at) - new Date(order.createdAt)) < 10 * 60 * 1000) // within 10 min
+          )
+          if (!match) return order
+          const newStatus = STATUS_MAP[match.status] || match.status
+          if (newStatus === order.status && order.backendId === match.id) return order
+          changed = true
+          return { ...order, status: newStatus, backendId: match.id, updatedAt: new Date().toISOString() }
+        })
+        return changed ? next : prev
+      })
+    } catch { /* silent */ }
+  }, [])
+
   return (
-    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser }}>
+    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone }}>
       {children}
     </OrdersContext.Provider>
   )

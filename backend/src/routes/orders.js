@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder, trackOrderByRef } from '../controllers/ordersController.js'
+import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder, trackOrderByRef, getOrdersByPhone } from '../controllers/ordersController.js'
 import { adminSecret, verifyToken } from '../middleware/auth.js'
 
 // Optional auth middleware — attaches user if token present, otherwise continues
@@ -15,6 +15,7 @@ const r = Router()
 r.post('/', optionalAuth, createOrder)
 r.get('/', adminSecret, getOrders)
 r.get('/stats', adminSecret, getOrderStats)
+r.get('/by-phone/:phone', getOrdersByPhone)           // Sync all orders by phone (no auth)
 r.get('/track/:id', optionalAuth, trackOrder)         // Poll by DB UUID
 r.get('/track-ref/:ref', trackOrderByRef)             // Poll by RF-... reference ID (no auth)
 r.get('/:id', adminSecret, getOrder)

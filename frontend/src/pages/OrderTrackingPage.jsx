@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useOrders } from '../context/OrdersContext'
 
@@ -17,64 +17,28 @@ const STATUS_INDEX = {
   rejected:         -1,
 }
 
-// Maps backend statuses to the frontend status keys used in STATUS_INDEX
-const BACKEND_TO_FRONTEND = {
-  placed:            'pending',
-  accepted:          'accepted',
-  preparing:         'accepted',   // show as Confirmed while preparing
-  out_for_delivery:  'out_for_delivery',
-  delivered:         'delivered',
-  cancelled:         'rejected',
-  rejected:          'rejected',
-}
 
 export default function OrderTrackingPage() {
   const { orderId } = useParams()
-  const { orders, updateOrderStatus } = useOrders()
+  const { orders, syncOrdersByPhone } = useOrders()
   const order = orders.find((o) => o.orderId === orderId)
+  const [syncing, setSyncing] = useState(false)
 
-  // Poll backend every 30 s for live status updates.
-  // Uses backendId (DB UUID) if available, otherwise falls back to the
-  // RF-... reference ID so ALL orders — including older ones — stay in sync.
+  // Sync status from backend on mount and every 30s using customer phone
   useEffect(() => {
-    if (!order) return
-    const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    const phone = order?.customer?.phone
+    if (!phone) return
 
-    async function poll() {
-      try {
-        let url, headers = {}
-        const token = localStorage.getItem('auth_token')
-
-        if (order.backendId) {
-          // Primary: poll by DB UUID (authenticated)
-          if (token) headers['Authorization'] = `Bearer ${token}`
-          url = `${BACKEND_URL}/api/orders/track/${order.backendId}`
-        } else {
-          // Fallback: poll by RF-... reference ID (no auth needed)
-          url = `${BACKEND_URL}/api/orders/track-ref/${encodeURIComponent(order.orderId)}`
-        }
-
-        const res = await fetch(url, { headers })
-        if (!res.ok) return
-        const data = await res.json()
-
-        // Save the backend DB id for future polls (faster path)
-        if (data.id && !order.backendId) {
-          updateOrderStatus(orderId, BACKEND_TO_FRONTEND[data.status] ?? data.status, null, data.id)
-          return
-        }
-
-        const frontendStatus = BACKEND_TO_FRONTEND[data.status] ?? data.status
-        if (frontendStatus && frontendStatus !== order.status) {
-          updateOrderStatus(orderId, frontendStatus)
-        }
-      } catch { /* network error — silently ignore */ }
+    async function sync() {
+      setSyncing(true)
+      await syncOrdersByPhone(phone)
+      setSyncing(false)
     }
 
-    poll() // immediate first check
-    const interval = setInterval(poll, 30_000)
+    sync() // immediate on mount
+    const interval = setInterval(sync, 30_000)
     return () => clearInterval(interval)
-  }, [order?.backendId, order?.orderId, order?.status, orderId, updateOrderStatus])
+  }, [order?.customer?.phone, syncOrdersByPhone])
 
   if (!order) {
     return (
@@ -100,7 +64,18 @@ export default function OrderTrackingPage() {
           </svg>
           Back to My Orders
         </Link>
-        <h1 className="text-2xl font-bold text-gray-800">Track Order</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-800">Track Order</h1>
+          {syncing && (
+            <span className="flex items-center gap-1 text-xs text-forest-500 font-medium">
+              <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Syncing…
+            </span>
+          )}
+        </div>
         <p className="text-gray-400 text-sm mt-0.5">Order #{order.orderId.slice(-12)}</p>
       </div>
 

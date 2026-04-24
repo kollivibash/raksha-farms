@@ -78,6 +78,25 @@ export async function updateOrderStatus(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
+// Public: return status of all orders matching a phone number (last 60 days)
+// No auth needed — phone number acts as the identifier for guest/user orders
+export async function getOrdersByPhone(req, res) {
+  try {
+    const phone = req.params.phone.replace(/\D/g, '').slice(-10)
+    if (phone.length < 8) return res.status(400).json({ error: 'Invalid phone' })
+    const { rows } = await query(
+      `SELECT id, reference_id, status, total, created_at, updated_at
+       FROM orders
+       WHERE address->>'phone' LIKE $1
+         AND created_at > NOW() - INTERVAL '60 days'
+       ORDER BY created_at DESC
+       LIMIT 30`,
+      [`%${phone}`]
+    )
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
 // User-facing status poll by DB UUID — no admin needed
 export async function trackOrder(req, res) {
   try {
