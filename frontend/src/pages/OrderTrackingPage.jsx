@@ -20,25 +20,23 @@ const STATUS_INDEX = {
 
 export default function OrderTrackingPage() {
   const { orderId } = useParams()
-  const { orders, syncOrdersByPhone } = useOrders()
+  const { orders, syncOrdersByUser, syncOrdersByPhone } = useOrders()
   const order = orders.find((o) => o.orderId === orderId)
   const [syncing, setSyncing] = useState(false)
 
-  // Sync status from backend on mount and every 30s using customer phone
+  // Sync on mount + every 30s — user_id first, phone fallback
   useEffect(() => {
-    const phone = order?.customer?.phone
-    if (!phone) return
-
     async function sync() {
       setSyncing(true)
-      await syncOrdersByPhone(phone)
+      await syncOrdersByUser()
+      const phone = order?.customer?.phone
+      if (phone) await syncOrdersByPhone(phone)
       setSyncing(false)
     }
-
-    sync() // immediate on mount
+    sync()
     const interval = setInterval(sync, 30_000)
     return () => clearInterval(interval)
-  }, [order?.customer?.phone, syncOrdersByPhone])
+  }, []) // eslint-disable-line
 
   if (!order) {
     return (

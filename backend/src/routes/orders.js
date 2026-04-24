@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder, trackOrderByRef, getOrdersByPhone } from '../controllers/ordersController.js'
+import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder, trackOrderByRef, getOrdersByPhone, getMyOrders } from '../controllers/ordersController.js'
 import { adminSecret, verifyToken } from '../middleware/auth.js'
 
 // Optional auth middleware — attaches user if token present, otherwise continues
@@ -13,6 +13,7 @@ function optionalAuth(req, res, next) {
 
 const r = Router()
 r.post('/', optionalAuth, createOrder)
+r.get('/mine', verifyToken, getMyOrders)   // Logged-in user's own orders
 r.get('/', adminSecret, getOrders)
 r.get('/stats', adminSecret, getOrderStats)
 r.get('/by-phone/:phone', getOrdersByPhone)           // Sync all orders by phone (no auth)

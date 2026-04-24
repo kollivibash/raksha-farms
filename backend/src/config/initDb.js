@@ -95,6 +95,15 @@ export async function initDb() {
       )
     `)
 
+    // Cart table for cross-device sync
+    await query(`
+      CREATE TABLE IF NOT EXISTS carts (
+        user_id  UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        items    JSONB DEFAULT '[]',
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+
     // Add reference_id column if it doesn't exist (stores the frontend RF-... order ID)
     await query(`
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)

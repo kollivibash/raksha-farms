@@ -58,8 +58,41 @@ export function OrdersProvider({ children }) {
     return orders.filter((o) => o.userEmail?.toLowerCase() === email.toLowerCase())
   }
 
-  // Fetch live statuses from backend by phone and sync localStorage.
-  // Works for ALL orders (old and new) — no backendId or reference_id required.
+  // Merge backend orders into localStorage — works for ALL order types
+  function applyBackendOrders(backendOrders) {
+    if (!backendOrders?.length) return
+    setOrders(prev => {
+      let changed = false
+      const next = prev.map(order => {
+        const match = backendOrders.find(b =>
+          (b.reference_id && b.reference_id === order.orderId) ||
+          (Math.abs(Number(b.total) - Number(order.total)) < 1 &&
+           Math.abs(new Date(b.created_at) - new Date(order.createdAt)) < 10 * 60 * 1000)
+        )
+        if (!match) return order
+        const newStatus = STATUS_MAP[match.status] || match.status
+        if (newStatus === order.status && order.backendId === match.id) return order
+        changed = true
+        return { ...order, status: newStatus, backendId: match.id, updatedAt: new Date().toISOString() }
+      })
+      return changed ? next : prev
+    })
+  }
+
+  // Primary: sync by user_id (works for all logged-in users including Google)
+  const syncOrdersByUser = useCallback(async () => {
+    const token = localStorage.getItem('auth_token')
+    if (!token) return
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/orders/mine`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) return
+      applyBackendOrders(await res.json())
+    } catch { /* silent */ }
+  }, [])
+
+  // Fallback: sync by phone (works for guest orders)
   const syncOrdersByPhone = useCallback(async (phone) => {
     if (!phone) return
     const digits = phone.replace(/\D/g, '').slice(-10)
@@ -67,31 +100,12 @@ export function OrdersProvider({ children }) {
     try {
       const res = await fetch(`${BACKEND_URL}/api/orders/by-phone/${digits}`)
       if (!res.ok) return
-      const backendOrders = await res.json()   // [{id, reference_id, status, total, created_at}]
-      if (!backendOrders.length) return
-
-      setOrders(prev => {
-        let changed = false
-        const next = prev.map(order => {
-          // Match by reference_id (new orders) or by total + date proximity (old orders)
-          const match = backendOrders.find(b =>
-            (b.reference_id && b.reference_id === order.orderId) ||
-            (Math.abs(Number(b.total) - Number(order.total)) < 1 &&
-             Math.abs(new Date(b.created_at) - new Date(order.createdAt)) < 10 * 60 * 1000) // within 10 min
-          )
-          if (!match) return order
-          const newStatus = STATUS_MAP[match.status] || match.status
-          if (newStatus === order.status && order.backendId === match.id) return order
-          changed = true
-          return { ...order, status: newStatus, backendId: match.id, updatedAt: new Date().toISOString() }
-        })
-        return changed ? next : prev
-      })
+      applyBackendOrders(await res.json())
     } catch { /* silent */ }
   }, [])
 
   return (
-    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone }}>
+    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone, syncOrdersByUser }}>
       {children}
     </OrdersContext.Provider>
   )

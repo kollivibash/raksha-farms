@@ -16,6 +16,7 @@ import analyticsRoutes     from './routes/analytics.js'
 import customersRoutes     from './routes/customers.js'
 import couponsRoutes       from './routes/coupons.js'
 import subscriptionsRoutes from './routes/subscriptions.js'
+import cartRoutes         from './routes/cart.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -60,12 +61,13 @@ app.use('/api/analytics',     analyticsRoutes)
 app.use('/api/customers',     customersRoutes)
 app.use('/api/coupons',       couponsRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
+app.use('/api/cart',         cartRoutes)
 
 // Health check — includes build date so we can confirm Render deployed latest code
 app.get('/health', (req, res) => res.json({
   status:    'ok',
   env:       process.env.NODE_ENV,
-  version:   '2026-04-24-v4',   // bump this on every deploy to verify new code is live
+  version:   '2026-04-24-v5',   // bump this on every deploy to verify new code is live
   features:  ['orders', 'order-tracking', 'rejected-status', 'user-block'],
 }))
 

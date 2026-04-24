@@ -13,17 +13,18 @@ const STATUS_STYLES = {
 
 export default function MyOrdersPage() {
   const { user, logout } = useAuth()
-  const { getOrdersByUser, syncOrdersByPhone } = useOrders()
+  const { getOrdersByUser, syncOrdersByUser, syncOrdersByPhone } = useOrders()
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
 
   const allOrders = getOrdersByUser(user?.email)
 
-  // Sync all order statuses from backend on every page visit
+  // Sync on every visit — by user_id first (all logged-in), phone fallback (guests)
   useEffect(() => {
+    syncOrdersByUser()
     const phone = user?.phone || allOrders[0]?.customer?.phone
     if (phone) syncOrdersByPhone(phone)
-  }, [user?.phone]) // eslint-disable-line
+  }, []) // eslint-disable-line
   const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
 
   const counts = allOrders.reduce((acc, o) => {

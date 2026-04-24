@@ -78,6 +78,18 @@ export async function updateOrderStatus(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
+// Authenticated: return all orders for the logged-in user (by user_id in DB)
+export async function getMyOrders(req, res) {
+  try {
+    const { rows } = await query(
+      `SELECT id, reference_id, status, total, created_at, updated_at
+       FROM orders WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+      [req.user.id]
+    )
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
 // Public: return status of all orders matching a phone number (last 60 days)
 // No auth needed — phone number acts as the identifier for guest/user orders
 export async function getOrdersByPhone(req, res) {
