@@ -5,7 +5,7 @@ import StatusBadge from '../../components/StatusBadge'
 import { ordersAPI } from '../../lib/api'
 import { Search, RefreshCw, Eye } from 'lucide-react'
 
-const STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
+const STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','rejected']
 
 const STATUS_LABELS = {
   placed:           'Placed',
