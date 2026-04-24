@@ -110,17 +110,6 @@ export default function Navbar() {
 
               {/* Right side */}
               <div className="flex items-center gap-2">
-                {/* Search toggle */}
-                <button
-                  onClick={() => setSearchOpen((v) => !v)}
-                  className="hidden sm:flex w-9 h-9 items-center justify-center rounded-xl hover:bg-sage-50 text-gray-500 transition-colors"
-                  aria-label="Search"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-
                 {/* Phone (desktop) */}
                 <a href="tel:+919346566945" className="hidden lg:flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-500 transition-colors font-medium">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,31 +202,6 @@ export default function Navbar() {
               </div>
             </div>
           </div>
-
-          {/* Search bar (expandable) */}
-          {searchOpen && (
-            <div className="border-t border-gray-100 px-4 py-2.5 bg-white/97 animate-slide-up">
-              <form onSubmit={handleSearch} className="max-w-2xl mx-auto relative">
-                <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  ref={searchRef}
-                  type="search"
-                  placeholder="Search for vegetables, fruits, oils, millets..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="input-field pl-10 pr-20 py-2.5 text-sm"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-forest-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg"
-                >
-                  Search
-                </button>
-              </form>
-            </div>
-          )}
 
           {/* Mobile menu */}
           {menuOpen && (
