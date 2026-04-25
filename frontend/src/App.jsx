@@ -7,6 +7,7 @@ import { ProductsProvider } from './context/ProductsContext'
 import { OrdersProvider }   from './context/OrdersContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { WishlistProvider } from './context/WishlistContext'
+import { LocationProvider } from './context/LocationContext'
 import Navbar               from './components/Navbar'
 import Footer               from './components/Footer'
 import BottomNav            from './components/BottomNav'
@@ -37,6 +38,7 @@ function RequireAuth({ children }) {
 export default function App() {
   return (
     <ToastProvider>
+      <LocationProvider>
       <ProductsProvider>
         <OrdersProvider>
           <WishlistProvider>
@@ -72,6 +74,7 @@ export default function App() {
           </WishlistProvider>
         </OrdersProvider>
       </ProductsProvider>
+      </LocationProvider>
     </ToastProvider>
   )
 }

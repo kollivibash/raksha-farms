@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useLocationCtx } from '../context/LocationContext'
 
 const HYDERABAD_AREAS = [
   'Banjara Hills','Jubilee Hills','Madhapur','Gachibowli','Kondapur',
@@ -9,21 +10,8 @@ const HYDERABAD_AREAS = [
   'Tarnaka','Habsiguda','Vanasthalipuram','Saroornagar','Nagole',
 ]
 
-export function useLocation() {
-  const [savedLocation, setSavedLocation] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('rf_location')) || null } catch { return null }
-  })
-
-  function setLocation(loc) {
-    setSavedLocation(loc)
-    localStorage.setItem('rf_location', JSON.stringify(loc))
-  }
-
-  return { savedLocation, setLocation }
-}
-
 export default function LocationPicker({ onClose }) {
-  const { setLocation } = useLocation()
+  const { setLocation } = useLocationCtx()
   const [search, setSearch] = useState('')
   const [detecting, setDetecting] = useState(false)
   const [detectedArea, setDetectedArea] = useState('')

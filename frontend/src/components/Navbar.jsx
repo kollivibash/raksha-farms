@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useWishlist } from '../context/WishlistContext'
 import { useAuth } from '../context/AuthContext'
-import LocationPicker, { useLocation as useSavedLocation } from './LocationPicker'
+import LocationPicker from './LocationPicker'
+import { useLocationCtx } from '../context/LocationContext'
 
 const announcements = [
   '🌱 100% Organic & Pesticide Free — Straight from our farms',
@@ -20,7 +21,7 @@ export default function Navbar() {
   const { user, logout, isLoggedIn } = useAuth()
   const location  = useLocation()
   const navigate  = useNavigate()
-  const { savedLocation } = useSavedLocation()
+  const { savedLocation } = useLocationCtx()
   const [scrolled, setScrolled]         = useState(false)
   const [menuOpen, setMenuOpen]         = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
