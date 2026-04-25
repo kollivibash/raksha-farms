@@ -1,10 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
-import { productsAPI } from '../../lib/api'
+import { productsAPI, categoriesAPI } from '../../lib/api'
 import { AlertTriangle, Package, Search } from 'lucide-react'
 
-const CATEGORIES = ['all','vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
+const FALLBACK_CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
 
 export default function InventoryPage() {
   const [products, setProducts] = useState([])
@@ -15,14 +15,17 @@ export default function InventoryPage() {
   const [reason, setReason] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [search, setSearch] = useState('')
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES)
 
   useEffect(() => {
     Promise.all([
       productsAPI.getAll({ limit: 200 }),
-      productsAPI.getLowStock(10)
-    ]).then(([all, low]) => {
+      productsAPI.getLowStock(10),
+      categoriesAPI.getAll().catch(() => ({ data: [] })),
+    ]).then(([all, low, cats]) => {
       setProducts(all.data.products)
       setLowStock(low.data)
+      if (cats.data && cats.data.length > 0) setCategories(cats.data.map(c => c.slug))
     }).finally(() => setLoading(false))
   }, [])
 
@@ -97,7 +100,7 @@ export default function InventoryPage() {
 
         {/* Category filter pills */}
         <div className="flex items-center gap-2 flex-wrap">
-          {CATEGORIES.map(cat => (
+          {['all', ...categories].map(cat => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}

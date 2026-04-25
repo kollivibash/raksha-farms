@@ -1,11 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
-import { productsAPI } from '../../lib/api'
+import { productsAPI, categoriesAPI } from '../../lib/api'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 
-const CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
-const EMPTY = { name:'', category:'vegetables', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false, is_active:true }
+const FALLBACK_CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
+const EMPTY = { name:'', category:'', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false, is_active:true }
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([])
@@ -16,15 +16,30 @@ export default function ProductsPage() {
   const [image, setImage] = useState(null)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES)
 
   async function load() {
     setLoading(true)
-    try { const { data } = await productsAPI.getAll({ limit: 100, search }); setProducts(data.products) }
+    try { const { data } = await productsAPI.getAll({ limit: 200, search }); setProducts(data.products) }
     catch(e) { console.error(e) } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
 
-  function openAdd() { setEditing(null); setForm(EMPTY); setImage(null); setShowModal(true) }
+  useEffect(() => {
+    load()
+    // Fetch dynamic categories from backend
+    categoriesAPI.getAll()
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const slugs = data.map(c => c.slug)
+          setCategories(slugs)
+          // Set default category for new products to first one
+          setForm(f => f.category ? f : { ...f, category: slugs[0] })
+        }
+      })
+      .catch(() => {}) // fallback stays as FALLBACK_CATEGORIES
+  }, [])
+
+  function openAdd() { setEditing(null); setForm({ ...EMPTY, category: categories[0] || '' }); setImage(null); setShowModal(true) }
   function openEdit(p) {
     setEditing(p.id)
     setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, offer_price:p.offer_price||'', stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false, is_active: p.is_active !== false })
@@ -132,7 +147,7 @@ export default function ProductsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select required value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]">
-                    {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                    {categories.map(c=><option key={c} value={c} className="capitalize">{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
                   </select>
                 </div>
                 <div>
