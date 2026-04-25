@@ -4,7 +4,13 @@ import AdminLayout from '../../components/AdminLayout'
 import { productsAPI, categoriesAPI } from '../../lib/api'
 import { AlertTriangle, Package, Search } from 'lucide-react'
 
-const FALLBACK_CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
+const FALLBACK_CATEGORIES = [
+  { slug:'vegetables', name:'Vegetables' },{ slug:'fruits', name:'Fruits' },
+  { slug:'oils', name:'Wood-Pressed Oils' },{ slug:'microgreens', name:'Microgreens' },
+  { slug:'mushrooms', name:'Mushrooms' },{ slug:'grains', name:'Whole Grains' },
+  { slug:'millets', name:'Millets' },{ slug:'eggs', name:'Eggs & Meat' },
+  { slug:'flours', name:'Stone-Ground Flours' },
+]
 
 export default function InventoryPage() {
   const [products, setProducts] = useState([])
@@ -25,7 +31,7 @@ export default function InventoryPage() {
     ]).then(([all, low, cats]) => {
       setProducts(all.data.products)
       setLowStock(low.data)
-      if (cats.data && cats.data.length > 0) setCategories(cats.data.map(c => c.slug))
+      if (cats.data && cats.data.length > 0) setCategories(cats.data.map(c => ({ slug: c.slug, name: c.name })))
     }).finally(() => setLoading(false))
   }, [])
 
@@ -100,17 +106,17 @@ export default function InventoryPage() {
 
         {/* Category filter pills */}
         <div className="flex items-center gap-2 flex-wrap">
-          {['all', ...categories].map(cat => (
+          {[{ slug:'all', name:'All Categories' }, ...categories].map(cat => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
-                selectedCategory === cat
+              key={cat.slug}
+              onClick={() => setSelectedCategory(cat.slug)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedCategory === cat.slug
                   ? 'bg-[#1B4332] text-white'
                   : 'bg-white border border-gray-200 text-gray-600 hover:border-[#1B4332] hover:text-[#1B4332]'
               }`}
             >
-              {cat === 'all' ? 'All Categories' : cat}
+              {cat.name}
             </button>
           ))}
         </div>

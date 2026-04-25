@@ -4,7 +4,13 @@ import AdminLayout from '../../components/AdminLayout'
 import { productsAPI, categoriesAPI } from '../../lib/api'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 
-const FALLBACK_CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
+const FALLBACK_CATEGORIES = [
+  { slug:'vegetables', name:'Vegetables' },{ slug:'fruits', name:'Fruits' },
+  { slug:'oils', name:'Wood-Pressed Oils' },{ slug:'microgreens', name:'Microgreens' },
+  { slug:'mushrooms', name:'Mushrooms' },{ slug:'grains', name:'Whole Grains' },
+  { slug:'millets', name:'Millets' },{ slug:'eggs', name:'Eggs & Meat' },
+  { slug:'flours', name:'Stone-Ground Flours' },
+]
 const EMPTY = { name:'', category:'', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false, is_active:true }
 
 export default function ProductsPage() {
@@ -26,20 +32,19 @@ export default function ProductsPage() {
 
   useEffect(() => {
     load()
-    // Fetch dynamic categories from backend
+    // Fetch dynamic categories from backend (full objects: slug + name)
     categoriesAPI.getAll()
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const slugs = data.map(c => c.slug)
-          setCategories(slugs)
-          // Set default category for new products to first one
-          setForm(f => f.category ? f : { ...f, category: slugs[0] })
+          const cats = data.map(c => ({ slug: c.slug, name: c.name }))
+          setCategories(cats)
+          setForm(f => f.category ? f : { ...f, category: cats[0].slug })
         }
       })
       .catch(() => {}) // fallback stays as FALLBACK_CATEGORIES
   }, [])
 
-  function openAdd() { setEditing(null); setForm({ ...EMPTY, category: categories[0] || '' }); setImage(null); setShowModal(true) }
+  function openAdd() { setEditing(null); setForm({ ...EMPTY, category: categories[0]?.slug || '' }); setImage(null); setShowModal(true) }
   function openEdit(p) {
     setEditing(p.id)
     setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, offer_price:p.offer_price||'', stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false, is_active: p.is_active !== false })
@@ -147,7 +152,7 @@ export default function ProductsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select required value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]">
-                    {categories.map(c=><option key={c} value={c} className="capitalize">{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+                    {categories.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
