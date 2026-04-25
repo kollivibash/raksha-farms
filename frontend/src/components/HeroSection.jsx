@@ -105,7 +105,7 @@ export default function HeroSection() {
 
               {/* Orbit cards — uniform animation keeps circle alignment */}
               {values.map((p, i) => {
-                const angle = (i / products.length) * 2 * Math.PI - Math.PI / 2
+                const angle = (i / values.length) * 2 * Math.PI - Math.PI / 2
                 const r = 155
                 const x = Math.cos(angle) * r
                 const y = Math.sin(angle) * r
