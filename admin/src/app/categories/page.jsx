@@ -4,22 +4,30 @@ import AdminLayout from '../../components/AdminLayout'
 import { categoriesAPI } from '../../lib/api'
 import { Plus, Pencil, Trash2, X } from 'lucide-react'
 
-const EMPTY = { slug:'', name:'', emoji:'🌿', color:'#22c55e', tagline:'', sort_order:0, is_active:true }
+const EMPTY = { slug:'', name:'', color:'#16a34a', tagline:'', sort_order:0, is_active:true }
 
 const PRESET_COLORS = [
   '#16a34a','#ef4444','#d97706','#65a30d','#78716c',
   '#ca8a04','#0d9488','#f43f5e','#f97316','#8b5cf6','#0ea5e9','#ec4899',
 ]
 
-const PRESET_EMOJIS = ['🥦','🍎','🫙','🌱','🍄','🌾','🌿','🥚','🍋','🥕','🫐','🧄','🥑','🍇','🌽','🥬','🍓','🫒']
+function Initials({ name, color }) {
+  const letters = name ? name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() : '?'
+  return (
+    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+      style={{ backgroundColor: color || '#16a34a' }}>
+      {letters}
+    </div>
+  )
+}
 
 export default function CategoriesPage() {
-  const [cats, setCats]         = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [cats, setCats]           = useState([])
+  const [loading, setLoading]     = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [editing, setEditing]   = useState(null)
-  const [form, setForm]         = useState(EMPTY)
-  const [saving, setSaving]     = useState(false)
+  const [editing, setEditing]     = useState(null)
+  const [form, setForm]           = useState(EMPTY)
+  const [saving, setSaving]       = useState(false)
 
   async function load() {
     setLoading(true)
@@ -28,8 +36,8 @@ export default function CategoriesPage() {
   }
   useEffect(() => { load() }, [])
 
-  function openAdd()  { setEditing(null); setForm(EMPTY); setShowModal(true) }
-  function openEdit(c) { setEditing(c.id); setForm({ slug:c.slug, name:c.name, emoji:c.emoji, color:c.color, tagline:c.tagline||'', sort_order:c.sort_order||0, is_active:c.is_active }); setShowModal(true) }
+  function openAdd()   { setEditing(null); setForm(EMPTY); setShowModal(true) }
+  function openEdit(c) { setEditing(c.id); setForm({ slug:c.slug, name:c.name, color:c.color, tagline:c.tagline||'', sort_order:c.sort_order||0, is_active:c.is_active }); setShowModal(true) }
 
   async function handleSave(e) {
     e.preventDefault(); setSaving(true)
@@ -42,7 +50,7 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(id, name) {
-    if (!confirm(`Delete "${name}"? Products in this category won't be deleted.`)) return
+    if (!confirm(`Delete "${name}"? Products won't be deleted.`)) return
     try { await categoriesAPI.delete(id); load() }
     catch(e) { alert('Delete failed') }
   }
@@ -81,9 +89,7 @@ export default function CategoriesPage() {
               <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ backgroundColor: c.color + '33' }}>
-                      {c.emoji}
-                    </div>
+                    <Initials name={c.name} color={c.color} />
                     <span className="font-medium text-gray-900">{c.name}</span>
                   </div>
                 </td>
@@ -118,15 +124,14 @@ export default function CategoriesPage() {
             </div>
             <form onSubmit={handleSave} className="p-5 space-y-4">
 
-              {/* Preview */}
-              <div className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: form.color + '22' }}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: form.color + '44' }}>
-                  {form.emoji}
-                </div>
+              {/* Live preview */}
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50">
+                <Initials name={form.name} color={form.color} />
                 <div>
-                  <p className="font-bold text-gray-800">{form.name || 'Category Name'}</p>
-                  <p className="text-xs text-gray-500">{form.tagline || 'Tagline here'}</p>
+                  <p className="font-bold text-gray-800 text-sm">{form.name || 'Category Name'}</p>
+                  <p className="text-xs text-gray-400">{form.tagline || 'Tagline preview'}</p>
                 </div>
+                <div className="ml-auto w-3 h-8 rounded-full" style={{ backgroundColor: form.color }} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -136,7 +141,7 @@ export default function CategoriesPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]" placeholder="e.g. Dairy Products"/>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Slug * <span className="text-gray-400 font-normal">(URL key)</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Slug * <span className="text-gray-400 font-normal text-xs">(URL key)</span></label>
                   <input required value={form.slug} onChange={e => f('slug', e.target.value.toLowerCase().replace(/\s+/g,'-'))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1B4332]" placeholder="dairy"/>
                 </div>
@@ -151,28 +156,13 @@ export default function CategoriesPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]" placeholder="e.g. Fresh from the farm"/>
                 </div>
 
-                {/* Emoji picker */}
+                {/* Color picker only */}
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Emoji</label>
-                  <div className="flex flex-wrap gap-2">
-                    {PRESET_EMOJIS.map(em => (
-                      <button key={em} type="button" onClick={() => f('emoji', em)}
-                        className={`w-9 h-9 text-xl rounded-lg border-2 transition ${form.emoji === em ? 'border-[#1B4332] bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        {em}
-                      </button>
-                    ))}
-                    <input value={form.emoji} onChange={e => f('emoji', e.target.value)}
-                      className="w-12 border border-gray-200 rounded-lg px-1 text-center text-xl focus:outline-none" maxLength={4} placeholder="✏️"/>
-                  </div>
-                </div>
-
-                {/* Color picker */}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Accent Color</label>
                   <div className="flex flex-wrap gap-2 items-center">
                     {PRESET_COLORS.map(col => (
                       <button key={col} type="button" onClick={() => f('color', col)}
-                        className={`w-8 h-8 rounded-full border-4 transition ${form.color === col ? 'border-gray-800 scale-110' : 'border-white shadow-sm hover:scale-110'}`}
+                        className={`w-8 h-8 rounded-full border-4 transition ${form.color === col ? 'border-gray-700 scale-110' : 'border-white shadow-sm hover:scale-110'}`}
                         style={{ backgroundColor: col }}/>
                     ))}
                     <input type="color" value={form.color} onChange={e => f('color', e.target.value)}

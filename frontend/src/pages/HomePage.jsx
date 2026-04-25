@@ -115,15 +115,14 @@ export default function HomePage() {
               <button
                 key={cat.id}
                 onClick={() => selectCategory(cat.id)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all border ${
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all border ${
                   activeCategory === cat.id
                     ? 'bg-forest-500 text-white border-forest-500 shadow-forest'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-forest-300'
                 }`}
               >
-                <span>{cat.icon}</span>
                 {cat.label}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                   activeCategory === cat.id ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
                 }`}>{categoryCounts[cat.id] || 0}</span>
               </button>
@@ -132,28 +131,29 @@ export default function HomePage() {
 
           {/* Category cards — desktop grid */}
           <div className="hidden md:grid grid-cols-5 gap-3 mb-6">
-            {CATEGORIES.filter((c) => c.id !== 'all').map((cat, i) => {
+            {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
               const isActive = activeCategory === cat.id
+              const accent = cat.hexColor || '#16a34a'
               return (
                 <button
                   key={cat.id}
                   onClick={() => selectCategory(cat.id)}
-                  className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all duration-300 ${
-                    isActive ? 'ring-4 ring-forest-400 ring-offset-2 shadow-forest' : 'shadow-card hover:shadow-soft'
+                  className={`group relative bg-white rounded-2xl p-5 text-left transition-all duration-200 border-2 ${
+                    isActive
+                      ? 'shadow-lg scale-[1.02]'
+                      : 'border-gray-100 shadow-sm hover:shadow-md hover:scale-[1.01]'
                   }`}
+                  style={{ borderColor: isActive ? accent : undefined }}
                 >
-                  {cat.hexColor
-                    ? <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${cat.hexColor}dd, ${cat.hexColor}99)` }} />
-                    : <div className={`absolute inset-0 bg-gradient-to-br ${cat.color}`} />
-                  }
-                  <div className="relative">
-                    <span className="category-emoji text-3xl mb-2 block">{cat.icon}</span>
-                    <p className="font-bold text-white text-sm leading-tight">{cat.label}</p>
-                    <p className="text-white/70 text-[10px] mt-0.5">{cat.desc}</p>
-                    <span className="inline-block mt-1.5 bg-white/20 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                      {categoryCounts[cat.id] || 0} items
-                    </span>
-                  </div>
+                  {/* Coloured top bar */}
+                  <div className="h-1 w-10 rounded-full mb-4 transition-all duration-200 group-hover:w-16"
+                    style={{ backgroundColor: accent }} />
+                  <p className="font-bold text-gray-800 text-sm leading-tight mb-1">{cat.label}</p>
+                  {cat.desc && <p className="text-gray-400 text-[11px] leading-snug">{cat.desc}</p>}
+                  <span className="inline-block mt-3 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: accent + '18', color: accent }}>
+                    {categoryCounts[cat.id] || 0} items
+                  </span>
                 </button>
               )
             })}
@@ -177,10 +177,9 @@ export default function HomePage() {
                     : 'bg-white text-gray-600 border-gray-200 hover:border-forest-400'
                 }`}
               >
-                <span>{cat.icon}</span>
                 {cat.label}
                 {categoryCounts[cat.id] > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                     activeCategory === cat.id ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
                   }`}>{categoryCounts[cat.id]}</span>
                 )}
