@@ -41,37 +41,48 @@ export default function LocationPicker({ onClose }) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const { latitude: lat, longitude: lon } = pos.coords
+          const { latitude: lat, longitude: lon, accuracy } = pos.coords
+          // Use zoom=16 for street-level detail, zoom=14 for area-level
+          const zoom = accuracy < 100 ? 16 : accuracy < 500 ? 14 : 12
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-            { headers: { 'Accept-Language': 'en' } }
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=${zoom}&addressdetails=1`,
+            { headers: { 'Accept-Language': 'en-IN,en' } }
           )
           const data = await res.json()
+          const addr = data.address || {}
+
+          // Indian address hierarchy: most specific first
           const area =
-            data.address?.suburb ||
-            data.address?.neighbourhood ||
-            data.address?.county ||
-            data.address?.city_district ||
-            data.address?.city ||
+            addr.neighbourhood ||   // most specific locality
+            addr.suburb ||          // suburb / area
+            addr.village ||         // village
+            addr.town ||            // town
+            addr.city_district ||   // district within city
+            addr.county ||          // broader area
+            addr.state_district ||  // state district
+            addr.city ||
             'Hyderabad'
+
+          const city = addr.city || addr.town || addr.county || 'Hyderabad'
+
           setDetectedArea(area)
-          setLocation({ area, city: data.address?.city || 'Hyderabad', coords: { lat, lon } })
+          setLocation({ area, city, coords: { lat, lon }, accuracy })
         } catch {
-          setDetectedArea('Hyderabad')
-          setLocation({ area: 'Hyderabad', city: 'Hyderabad' })
+          // Nominatim failed — still use GPS coords and show generic label
+          setLocation({ area: 'Current Location', city: 'Hyderabad' })
         }
         setDetecting(false)
         onClose()
       },
       (err) => {
         setGpsError(
-          err.code === 1 ? 'Location access denied. Please allow location in browser settings.' :
-          err.code === 2 ? 'Location unavailable. Try searching manually.' :
-          'Location request timed out. Try searching manually.'
+          err.code === 1 ? 'Location access denied. Please allow location access in your browser settings.' :
+          err.code === 2 ? 'Could not detect location. Try searching your area below.' :
+          'Detection timed out. Try searching your area below.'
         )
         setDetecting(false)
       },
-      { timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )
   }
 
