@@ -4,14 +4,14 @@ export async function getProducts(req, res) {
   try {
     const { category, search, page = 1, limit = 20 } = req.query
     const offset = (page - 1) * limit
-    let sql = 'SELECT * FROM products WHERE 1=1'
+    let sql = 'SELECT * FROM products WHERE is_active=true'
     const params = []
     if (category) { params.push(category); sql += ` AND category = $${params.length}` }
     if (search)   { params.push(`%${search}%`); sql += ` AND name ILIKE $${params.length}` }
     sql += ` ORDER BY created_at DESC LIMIT $${params.length+1} OFFSET $${params.length+2}`
     params.push(limit, offset)
     const { rows } = await query(sql, params)
-    const count = await query('SELECT COUNT(*) FROM products WHERE 1=1' +
+    const count = await query('SELECT COUNT(*) FROM products WHERE is_active=true' +
       (category ? ' AND category=$1' : '') + (search ? ` AND name ILIKE $${category?2:1}` : ''),
       [category, search].filter(Boolean).map((v,i) => i===1&&search ? `%${v}%` : v)
     )

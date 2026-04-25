@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useOrders } from '../context/OrdersContext'
-import { CATEGORIES } from '../data/products2'
+import { CATEGORIES as FALLBACK_CATEGORIES } from '../data/products2'
 
 // Password is stored only in env/config — never shown as a hint in UI
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'raksha@admin2024'
@@ -469,6 +469,23 @@ function ProductsPanel() {
   const [errors, setErrors] = useState({})
   const [inlineEdits, setInlineEdits] = useState({})
   const [editingCell, setEditingCell] = useState(null)
+  const [CATEGORIES, setCategories] = useState(FALLBACK_CATEGORIES)
+
+  useEffect(() => {
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    fetch(`${BACKEND_URL}/api/categories`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const cats = [
+            { id: 'all', label: 'All Products', icon: '🛒' },
+            ...data.map(c => ({ id: c.slug, label: c.name, icon: c.emoji || '🌿' }))
+          ]
+          setCategories(cats)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   function defaultForm() {
     return { name:'', category:'vegetables', price:'', unit:'kg', stock:'', description:'', featured:false }
@@ -699,6 +716,22 @@ function DailyUpdatePanel() {
   const [filterCat, setFilterCat] = useState('all')
   const [drafts, setDrafts] = useState(() => Object.fromEntries(products.map((p) => [p.id, { price: p.price, stock: p.stock }])))
   const [saved, setSaved]   = useState({})
+  const [CATEGORIES, setCategories] = useState(FALLBACK_CATEGORIES)
+
+  useEffect(() => {
+    const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    fetch(`${BACKEND_URL}/api/categories`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setCategories([
+            { id: 'all', label: 'All Products', icon: '🛒' },
+            ...data.map(c => ({ id: c.slug, label: c.name, icon: c.emoji || '🌿' }))
+          ])
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     setDrafts((prev) => {
