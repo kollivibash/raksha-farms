@@ -44,21 +44,30 @@ export async function createProduct(req, res) {
 
 export async function updateProduct(req, res) {
   try {
-    const { name, category, description, price, offer_price, stock, unit, variants, is_active, is_featured } = req.body
-    const image_url = req.file ? `/uploads/${req.file.filename}` : undefined
+    const { name, category, description, price, offer_price, stock, unit, is_active, is_featured } = req.body
+    const image_url   = req.file ? `/uploads/${req.file.filename}` : undefined
     const offerVal    = offer_price && Number(offer_price) > 0 ? Number(offer_price) : null
     const activeVal   = is_active === true || is_active === 'true'
     const featuredVal = is_featured === true || is_featured === 'true'
-    const fields = ['name','category','description','price','offer_price','stock','unit','variants','is_active','is_featured']
-    const values = [name, category, description, price, offerVal, stock, unit,
-                    JSON.stringify(variants || []), activeVal, featuredVal]
-    if (image_url) { fields.push('image_url'); values.push(image_url) }
-    const setClause = fields.map((f, i) => `${f}=$${i+1}`).join(',') + ',updated_at=NOW()'
+
+    // Check if product exists first
+    const { rows: existing } = await query('SELECT id FROM products WHERE id=$1', [req.params.id])
+    if (!existing[0]) return res.status(404).json({ error: 'Product not found' })
+
+    // Build SET clause only for defined fields
+    const sets = [
+      `name=$1`, `category=$2`, `description=$3`, `price=$4`,
+      `stock=$5`, `unit=$6`, `is_active=$7`, `is_featured=$8`,
+      `offer_price=$9`, `updated_at=NOW()`
+    ]
+    const vals = [name, category, description, price, stock, unit, activeVal, featuredVal, offerVal]
+
+    if (image_url) { sets.push(`image_url=$${vals.length + 1}`); vals.push(image_url) }
+
     const { rows } = await query(
-      `UPDATE products SET ${setClause} WHERE id=$${fields.length+1} RETURNING *`,
-      [...values, req.params.id]
+      `UPDATE products SET ${sets.join(',')} WHERE id=$${vals.length + 1} RETURNING *`,
+      [...vals, req.params.id]
     )
-    if (!rows[0]) return res.status(404).json({ error: 'Product not found' })
     res.json(rows[0])
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
