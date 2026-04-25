@@ -46,10 +46,12 @@ export async function updateProduct(req, res) {
   try {
     const { name, category, description, price, offer_price, stock, unit, variants, is_active, is_featured } = req.body
     const image_url = req.file ? `/uploads/${req.file.filename}` : undefined
-    const offerVal = offer_price && Number(offer_price) > 0 ? Number(offer_price) : null
+    const offerVal    = offer_price && Number(offer_price) > 0 ? Number(offer_price) : null
+    const activeVal   = is_active === true || is_active === 'true'
+    const featuredVal = is_featured === true || is_featured === 'true'
     const fields = ['name','category','description','price','offer_price','stock','unit','variants','is_active','is_featured']
     const values = [name, category, description, price, offerVal, stock, unit,
-                    JSON.stringify(variants || []), is_active, is_featured]
+                    JSON.stringify(variants || []), activeVal, featuredVal]
     if (image_url) { fields.push('image_url'); values.push(image_url) }
     const setClause = fields.map((f, i) => `${f}=$${i+1}`).join(',') + ',updated_at=NOW()'
     const { rows } = await query(

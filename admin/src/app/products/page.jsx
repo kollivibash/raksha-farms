@@ -5,7 +5,7 @@ import { productsAPI } from '../../lib/api'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 
 const CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
-const EMPTY = { name:'', category:'vegetables', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false }
+const EMPTY = { name:'', category:'vegetables', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false, is_active:true }
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([])
@@ -27,7 +27,7 @@ export default function ProductsPage() {
   function openAdd() { setEditing(null); setForm(EMPTY); setImage(null); setShowModal(true) }
   function openEdit(p) {
     setEditing(p.id)
-    setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, offer_price:p.offer_price||'', stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false })
+    setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, offer_price:p.offer_price||'', stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false, is_active: p.is_active !== false })
     setImage(null); setShowModal(true)
   }
 
@@ -173,9 +173,15 @@ export default function ProductsPage() {
                   <input type="file" accept="image/*" onChange={e=>setImage(e.target.files[0])}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"/>
                 </div>
-                <div className="col-span-2 flex items-center gap-2">
-                  <input type="checkbox" id="featured" checked={form.is_featured} onChange={e=>setForm(p=>({...p,is_featured:e.target.checked}))} className="w-4 h-4"/>
-                  <label htmlFor="featured" className="text-sm text-gray-700">Mark as Featured</label>
+                <div className="col-span-2 flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="is_active" checked={form.is_active} onChange={e=>setForm(p=>({...p,is_active:e.target.checked}))} className="w-4 h-4"/>
+                    <label htmlFor="is_active" className="text-sm text-gray-700">Active (visible on website)</label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="featured" checked={form.is_featured} onChange={e=>setForm(p=>({...p,is_featured:e.target.checked}))} className="w-4 h-4"/>
+                    <label htmlFor="featured" className="text-sm text-gray-700">Mark as Featured</label>
+                  </div>
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
