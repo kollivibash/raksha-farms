@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse,
-  Users, Tag, RefreshCw, BarChart2, Settings, LogOut, Leaf
+  Users, Tag, RefreshCw, BarChart2, Settings, LogOut, Leaf, Grid3X3
 } from 'lucide-react'
 import Cookies from 'js-cookie'
 
@@ -11,6 +11,7 @@ const nav = [
   { label:'Dashboard',     href:'/',               icon: LayoutDashboard },
   { label:'Orders',        href:'/orders',         icon: ShoppingCart },
   { label:'Products',      href:'/products',       icon: Package },
+  { label:'Categories',    href:'/categories',     icon: Grid3X3 },
   { label:'Inventory',     href:'/inventory',      icon: Warehouse },
   { label:'Customers',     href:'/customers',      icon: Users },
   { label:'Coupons',       href:'/coupons',        icon: Tag },

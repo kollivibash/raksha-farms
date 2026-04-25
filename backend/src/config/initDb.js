@@ -104,6 +104,45 @@ export async function initDb() {
       )
     `)
 
+    // Categories table — admin-managed, drives the frontend category grid
+    await query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id         SERIAL PRIMARY KEY,
+        slug       VARCHAR(50) UNIQUE NOT NULL,
+        name       VARCHAR(100) NOT NULL,
+        emoji      VARCHAR(10) DEFAULT '🌿',
+        color      VARCHAR(20) DEFAULT '#22c55e',
+        tagline    VARCHAR(150) DEFAULT '',
+        sort_order INTEGER DEFAULT 0,
+        is_active  BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+
+    // Seed default categories if table is empty
+    const { rows: catCount } = await query('SELECT COUNT(*) FROM categories')
+    if (parseInt(catCount[0].count) === 0) {
+      const defaults = [
+        ['vegetables','Vegetables','🥦','#16a34a','Farm-fresh picks',1],
+        ['fruits','Fruits','🍎','#ef4444','Seasonal goodness',2],
+        ['oils','Wood-Pressed Oils','🫙','#d97706','Cold-pressed purity',3],
+        ['microgreens','Microgreens','🌱','#65a30d','Subscribe & save',4],
+        ['mushrooms','Mushrooms','🍄','#78716c','Gourmet varieties',5],
+        ['grains','Whole Grains','🌾','#ca8a04','Ancient superfoods',6],
+        ['millets','Millets','🌿','#0d9488','Gluten-free grains',7],
+        ['eggs','Eggs & Meat','🥚','#f43f5e','Farm-raised protein',8],
+        ['flours','Stone-Ground Flours','🫙','#f97316','Traditional milling',9],
+      ]
+      for (const [slug,name,emoji,color,tagline,sort_order] of defaults) {
+        await query(
+          `INSERT INTO categories (slug,name,emoji,color,tagline,sort_order) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (slug) DO NOTHING`,
+          [slug,name,emoji,color,tagline,sort_order]
+        )
+      }
+      console.log('✅ Default categories seeded')
+    }
+
     // Add reference_id column if it doesn't exist (stores the frontend RF-... order ID)
     await query(`
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)

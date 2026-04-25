@@ -8,13 +8,35 @@ import ProductCard from '../components/ProductCard'
 import TrustBadges from '../components/TrustBadges'
 import FreeDeliveryBar from '../components/FreeDeliveryBar'
 import { useProducts } from '../context/ProductsContext'
-import { CATEGORIES } from '../data/products2'
+import { CATEGORIES as FALLBACK_CATEGORIES } from '../data/products2'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+// Convert backend category (has hex color) to a tailwind-compatible gradient string
+function catColor(hex) {
+  return hex || '#16a34a'
+}
 
 export default function HomePage() {
   useScrollReveal()
   const { products } = useProducts()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [backendCats, setBackendCats] = useState(null) // null = not loaded yet
+
+  // Fetch categories from backend; fall back to static list if API fails
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/categories`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (Array.isArray(data) && data.length) setBackendCats(data) })
+      .catch(() => {})
+  }, [])
+
+  // Merge backend categories with static fallback for display
+  const CATEGORIES = backendCats
+    ? [{ id: 'all', label: 'All Products', icon: '🛒', color: 'from-forest-400 to-forest-600', desc: 'Everything fresh' },
+       ...backendCats.map(c => ({ id: c.slug, label: c.name, icon: c.emoji, color: null, hexColor: c.color, desc: c.tagline || '' }))]
+    : FALLBACK_CATEGORIES
 
   const [activeCategory, setActiveCategory] = useState('all')
 
@@ -120,7 +142,10 @@ export default function HomePage() {
                     isActive ? 'ring-4 ring-forest-400 ring-offset-2 shadow-forest' : 'shadow-card hover:shadow-soft'
                   }`}
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-${isActive ? '100' : '90'}`} />
+                  {cat.hexColor
+                    ? <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${cat.hexColor}dd, ${cat.hexColor}99)` }} />
+                    : <div className={`absolute inset-0 bg-gradient-to-br ${cat.color}`} />
+                  }
                   <div className="relative">
                     <span className="category-emoji text-3xl mb-2 block">{cat.icon}</span>
                     <p className="font-bold text-white text-sm leading-tight">{cat.label}</p>

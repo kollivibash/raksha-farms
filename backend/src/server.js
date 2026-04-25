@@ -17,6 +17,7 @@ import customersRoutes     from './routes/customers.js'
 import couponsRoutes       from './routes/coupons.js'
 import subscriptionsRoutes from './routes/subscriptions.js'
 import cartRoutes         from './routes/cart.js'
+import categoriesRoutes  from './routes/categories.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -62,6 +63,7 @@ app.use('/api/customers',     customersRoutes)
 app.use('/api/coupons',       couponsRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
 app.use('/api/cart',         cartRoutes)
+app.use('/api/categories',   categoriesRoutes)
 
 // Health check — includes build date so we can confirm Render deployed latest code
 app.get('/health', (req, res) => res.json({

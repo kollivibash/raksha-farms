@@ -81,4 +81,12 @@ export const subscriptionsAPI = {
   update: (id, data) => api.put(`/subscriptions/${id}`, data),
 }
 
+// ── Categories ────────────────────────────────────────
+export const categoriesAPI = {
+  getAll: () => api.get('/categories/all'),
+  create: (data) => api.post('/categories', data),
+  update: (id, data) => api.put(`/categories/${id}`, data),
+  delete: (id) => api.delete(`/categories/${id}`),
+}
+
 export default api
