@@ -24,6 +24,7 @@ export function ProductsProvider({ children }) {
             category:    p.category,
             description: p.description || '',
             price:       Number(p.price),
+            offer_price: p.offer_price ? Number(p.offer_price) : null,
             unit:        p.unit || 'kg',
             stock:       Number(p.stock),
             image:       p.image_url
