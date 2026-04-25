@@ -8,13 +8,13 @@ const stats = [
   { value: '4.9★', label: 'Customer Rating', icon: '⭐' },
 ]
 
-const products = [
-  { emoji: '🥦', name: 'Vegetables',    color: 'bg-green-500/20',  border: 'border-green-400/30' },
-  { emoji: '🍎', name: 'Fresh Fruits',  color: 'bg-red-500/20',    border: 'border-red-400/30' },
-  { emoji: '🌾', name: 'Millets',       color: 'bg-yellow-500/20', border: 'border-yellow-400/30' },
-  { emoji: '🫙', name: 'Wood-pressed Oils', color: 'bg-amber-500/20',  border: 'border-amber-400/30' },
-  { emoji: '🥚', name: 'Eggs & Meat',   color: 'bg-orange-500/20', border: 'border-orange-400/30' },
-  { emoji: '🍄', name: 'Mushrooms',     color: 'bg-purple-500/20', border: 'border-purple-400/30' },
+const values = [
+  { emoji: '🌿', name: '100% Organic',   color: 'bg-green-500/20',  border: 'border-green-400/30' },
+  { emoji: '✅', name: 'Trusted Quality', color: 'bg-emerald-500/20', border: 'border-emerald-400/30' },
+  { emoji: '⚡', name: 'Same-day Fresh', color: 'bg-yellow-500/20', border: 'border-yellow-400/30' },
+  { emoji: '🚫', name: 'No Chemicals',   color: 'bg-red-500/20',    border: 'border-red-400/30' },
+  { emoji: '🚚', name: 'Fast Delivery',  color: 'bg-blue-500/20',   border: 'border-blue-400/30' },
+  { emoji: '🤝', name: 'Farm Direct',    color: 'bg-amber-500/20',  border: 'border-amber-400/30' },
 ]
 
 export default function HeroSection() {
@@ -104,7 +104,7 @@ export default function HeroSection() {
               </div>
 
               {/* Orbit cards — uniform animation keeps circle alignment */}
-              {products.map((p, i) => {
+              {values.map((p, i) => {
                 const angle = (i / products.length) * 2 * Math.PI - Math.PI / 2
                 const r = 155
                 const x = Math.cos(angle) * r
