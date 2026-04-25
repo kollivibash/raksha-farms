@@ -35,7 +35,10 @@ export default function ProductPage() {
   const [notified, setNotified] = useState(false)
   const [imgError, setImgError] = useState(false)
 
-  const activePrice = selectedVariant?.price ?? product?.price
+  const activePrice  = selectedVariant?.price ?? product?.price
+  const offerPrice   = !selectedVariant && product?.offer_price ? Number(product.offer_price) : null
+  const displayPrice = offerPrice ?? activePrice
+  const discountPct  = offerPrice ? Math.round((1 - offerPrice / activePrice) * 100) : 0
   const activeUnit  = selectedVariant?.label ?? product?.unit
   const cartKey     = selectedVariant ? `${id}_${selectedVariant.label}` : id
   const cartItem    = cart.find((i) => i.cartKey === cartKey)
@@ -127,9 +130,17 @@ export default function ProductPage() {
           </div>
 
           {/* Price */}
-          <div className="flex items-baseline gap-2 mb-5">
-            <span className="text-4xl font-black text-forest-500">₹{activePrice}</span>
-            <span className="text-gray-400 text-lg">/{activeUnit}</span>
+          <div className="mb-5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-forest-500">₹{displayPrice}</span>
+              {offerPrice && <span className="text-xl text-gray-400 line-through">₹{activePrice}</span>}
+              <span className="text-gray-400 text-lg">/{activeUnit}</span>
+            </div>
+            {discountPct > 0 && (
+              <span className="inline-block mt-1 text-sm font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                {discountPct}% OFF
+              </span>
+            )}
           </div>
 
           {/* Description */}
@@ -223,7 +234,7 @@ export default function ProductPage() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 5M7 13l1.5 5m7-5l1.5 5M17 18a1 1 0 11-2 0 1 1 0 012 0zM9 18a1 1 0 11-2 0 1 1 0 012 0z" />
                 </svg>
-                Add to Cart · ₹{activePrice * qty}
+                Add to Cart · ₹{displayPrice * qty}
               </button>
             </div>
           )}

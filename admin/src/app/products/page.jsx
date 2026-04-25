@@ -5,7 +5,7 @@ import { productsAPI } from '../../lib/api'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 
 const CATEGORIES = ['vegetables','fruits','oils','microgreens','mushrooms','grains','millets','eggs','flours']
-const EMPTY = { name:'', category:'vegetables', description:'', price:'', stock:'', unit:'kg', is_featured:false }
+const EMPTY = { name:'', category:'vegetables', description:'', price:'', offer_price:'', stock:'', unit:'kg', is_featured:false }
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([])
@@ -27,7 +27,7 @@ export default function ProductsPage() {
   function openAdd() { setEditing(null); setForm(EMPTY); setImage(null); setShowModal(true) }
   function openEdit(p) {
     setEditing(p.id)
-    setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false })
+    setForm({ name:p.name, category:p.category, description:p.description||'', price:p.price, offer_price:p.offer_price||'', stock:p.stock, unit:p.unit||'kg', is_featured:p.is_featured||false })
     setImage(null); setShowModal(true)
   }
 
@@ -141,9 +141,22 @@ export default function ProductsPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]" placeholder="kg, 500g…"/>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">MRP / Original Price (₹) *</label>
                   <input required type="number" min="0" step="0.01" value={form.price} onChange={e=>setForm(p=>({...p,price:e.target.value}))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Offer Price (₹) <span className="text-gray-400 font-normal text-xs">optional</span>
+                  </label>
+                  <input type="number" min="0" step="0.01" value={form.offer_price} onChange={e=>setForm(p=>({...p,offer_price:e.target.value}))}
+                    placeholder="Leave empty for no offer"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]"/>
+                  {form.offer_price && form.price && Number(form.offer_price) < Number(form.price) && (
+                    <p className="text-green-600 text-xs mt-1 font-medium">
+                      {Math.round((1 - form.offer_price/form.price)*100)}% off
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Stock *</label>

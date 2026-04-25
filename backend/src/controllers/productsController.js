@@ -29,12 +29,13 @@ export async function getProduct(req, res) {
 
 export async function createProduct(req, res) {
   try {
-    const { name, category, description, price, stock, unit, variants, is_featured } = req.body
+    const { name, category, description, price, offer_price, stock, unit, variants, is_featured } = req.body
     const image_url = req.file ? `/uploads/${req.file.filename}` : null
+    const offerVal = offer_price && Number(offer_price) > 0 ? Number(offer_price) : null
     const { rows } = await query(
-      `INSERT INTO products (name, category, description, price, stock, unit, image_url, variants, is_featured)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [name, category, description, price, stock, unit, image_url,
+      `INSERT INTO products (name, category, description, price, offer_price, stock, unit, image_url, variants, is_featured)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [name, category, description, price, offerVal, stock, unit, image_url,
        JSON.stringify(variants || []), is_featured || false]
     )
     res.status(201).json(rows[0])
@@ -43,17 +44,17 @@ export async function createProduct(req, res) {
 
 export async function updateProduct(req, res) {
   try {
-    const { name, category, description, price, stock, unit, variants, is_active, is_featured } = req.body
+    const { name, category, description, price, offer_price, stock, unit, variants, is_active, is_featured } = req.body
     const image_url = req.file ? `/uploads/${req.file.filename}` : undefined
-    const fields = ['name','category','description','price','stock','unit','variants','is_active','is_featured']
-    const values = [name, category, description, price, stock, unit,
+    const offerVal = offer_price && Number(offer_price) > 0 ? Number(offer_price) : null
+    const fields = ['name','category','description','price','offer_price','stock','unit','variants','is_active','is_featured']
+    const values = [name, category, description, price, offerVal, stock, unit,
                     JSON.stringify(variants || []), is_active, is_featured]
     if (image_url) { fields.push('image_url'); values.push(image_url) }
-    fields.push('updated_at'); values.push('NOW()')
-    const setClause = fields.map((f,i) => f==='updated_at' ? `${f}=NOW()` : `${f}=$${i+1}`).filter(s=>!s.includes('NOW()')).join(',') + ',updated_at=NOW()'
+    const setClause = fields.map((f, i) => `${f}=$${i+1}`).join(',') + ',updated_at=NOW()'
     const { rows } = await query(
-      `UPDATE products SET ${setClause} WHERE id=$${values.filter((_,i)=>fields[i]!=='updated_at').length+1} RETURNING *`,
-      [...values.filter((_,i)=>fields[i]!=='updated_at'), req.params.id]
+      `UPDATE products SET ${setClause} WHERE id=$${fields.length+1} RETURNING *`,
+      [...values, req.params.id]
     )
     if (!rows[0]) return res.status(404).json({ error: 'Product not found' })
     res.json(rows[0])

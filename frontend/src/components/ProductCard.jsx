@@ -40,7 +40,10 @@ export default function ProductCard({ product }) {
     product.variants ? product.variants[0] : null
   )
 
-  const activePrice = selectedVariant ? selectedVariant.price : product.price
+  const activePrice    = selectedVariant ? selectedVariant.price : product.price
+  const offerPrice     = !selectedVariant && product.offer_price ? Number(product.offer_price) : null
+  const displayPrice   = offerPrice ?? activePrice
+  const discountPct    = offerPrice ? Math.round((1 - offerPrice / activePrice) * 100) : 0
   const activeUnit  = selectedVariant ? selectedVariant.label : product.unit
   // Short unit for price display — strip parenthetical details e.g. "1kg (4-6 pcs)" → "1kg"
   const displayUnit = activeUnit?.split('(')[0].trim() || activeUnit
@@ -194,9 +197,17 @@ export default function ProductCard({ product }) {
 
         {/* Price + stock */}
         <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-baseline gap-0.5 min-w-0">
-            <span className="text-forest-500 font-black text-lg sm:text-xl flex-shrink-0">₹{activePrice}</span>
-            <span className="text-gray-400 text-[10px] truncate">/{displayUnit}</span>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-forest-500 font-black text-lg sm:text-xl flex-shrink-0">₹{displayPrice}</span>
+              {offerPrice && <span className="text-gray-400 text-xs line-through flex-shrink-0">₹{activePrice}</span>}
+              <span className="text-gray-400 text-[10px] truncate">/{displayUnit}</span>
+            </div>
+            {discountPct > 0 && (
+              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full w-fit mt-0.5">
+                {discountPct}% OFF
+              </span>
+            )}
           </div>
           {!isOutOfStock && (
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${

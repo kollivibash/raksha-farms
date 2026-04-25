@@ -26,6 +26,7 @@ export async function initDb() {
         category    VARCHAR(50) NOT NULL,
         description TEXT,
         price       DECIMAL(10,2) NOT NULL,
+        offer_price DECIMAL(10,2) DEFAULT NULL,
         stock       INTEGER DEFAULT 0,
         unit        VARCHAR(20),
         image_url   VARCHAR(500),
@@ -103,6 +104,9 @@ export async function initDb() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `)
+
+    // Add offer_price to existing products table if missing
+    await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS offer_price DECIMAL(10,2) DEFAULT NULL`)
 
     // Categories table — admin-managed, drives the frontend category grid
     await query(`
