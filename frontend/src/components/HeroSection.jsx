@@ -1,5 +1,4 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
 
 const stats = [
   { value: '500+', label: 'Happy Families', icon: '👨‍👩‍👧' },
@@ -9,12 +8,12 @@ const stats = [
 ]
 
 const values = [
-  { emoji: '🌿', name: '100% Organic',   color: 'bg-green-500/20',  border: 'border-green-400/30' },
-  { emoji: '✅', name: 'Trusted Quality', color: 'bg-emerald-500/20', border: 'border-emerald-400/30' },
-  { emoji: '⚡', name: 'Same-day Fresh', color: 'bg-yellow-500/20', border: 'border-yellow-400/30' },
-  { emoji: '🚫', name: 'No Chemicals',   color: 'bg-red-500/20',    border: 'border-red-400/30' },
-  { emoji: '🚚', name: 'Fast Delivery',  color: 'bg-blue-500/20',   border: 'border-blue-400/30' },
-  { emoji: '🤝', name: 'Farm Direct',    color: 'bg-amber-500/20',  border: 'border-amber-400/30' },
+  { emoji: '🌿', name: '100% Organic',    desc: 'No pesticides, ever',      color: 'from-green-500/25 to-green-600/10'  },
+  { emoji: '⚡', name: 'Same-day Fresh',  desc: 'Harvested & delivered daily', color: 'from-yellow-500/25 to-yellow-600/10' },
+  { emoji: '🚫', name: 'No Chemicals',    desc: 'Pure & safe for your family', color: 'from-red-500/25 to-red-600/10'      },
+  { emoji: '🚚', name: 'Fast Delivery',   desc: 'At your door by noon',      color: 'from-blue-500/25 to-blue-600/10'    },
+  { emoji: '✅', name: 'Trusted Quality', desc: 'Quality checked every batch', color: 'from-emerald-500/25 to-emerald-600/10' },
+  { emoji: '🤝', name: 'Farm Direct',     desc: 'Zero middlemen, honest price', color: 'from-amber-500/25 to-amber-600/10'  },
 ]
 
 export default function HeroSection() {
@@ -24,40 +23,36 @@ export default function HeroSection() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-hero-gradient min-h-[520px] md:min-h-[600px] flex items-center">
+    <section className="relative overflow-hidden bg-hero-gradient min-h-[520px] md:min-h-[620px] flex items-center">
 
-      {/* Background blobs */}
+      {/* Background decoration */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-earth-500/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-3xl" />
-        <div className="absolute inset-0 opacity-[0.04]"
-          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+        <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-earth-500/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.035]"
+          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
       </div>
 
       <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
           {/* ── Left: Text ── */}
           <div>
-            {/* Badge */}
             <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/25 text-white text-xs font-semibold px-4 py-2 rounded-full mb-6">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
               Now delivering across Hyderabad
             </div>
 
-            {/* Headline */}
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-[1.08] mb-5">
               Farm-Fresh<br />
               <span className="text-earth-400">Goodness,</span><br />
               Delivered Daily
             </h1>
 
-            {/* Sub */}
             <p className="text-white/75 text-base md:text-lg mb-8 max-w-lg leading-relaxed">
               Organic vegetables, fruits, millets & more — harvested at sunrise, at your door by noon. No chemicals, no cold storage.
             </p>
 
-            {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
               <a href="#products" onClick={scrollToProducts}
                 className="btn-ripple inline-flex items-center justify-center gap-2 bg-earth-500 hover:bg-earth-600 text-white font-bold px-8 py-4 rounded-2xl transition-all duration-200 shadow-lg text-base">
@@ -75,7 +70,6 @@ export default function HeroSection() {
               </a>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {stats.map((s) => (
                 <div key={s.label} className="text-center bg-white/10 backdrop-blur-sm rounded-2xl p-3 border border-white/15 hover:bg-white/15 transition-colors">
@@ -87,45 +81,18 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* ── Right: Product Showcase (desktop only) ── */}
-          <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-[380px] h-[380px]">
-              {/* Center glow */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-56 h-56 rounded-full bg-white/10 blur-2xl" />
-              </div>
-
-              {/* Center emblem */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-28 h-28 rounded-full bg-white/15 backdrop-blur-md border-2 border-white/30 flex flex-col items-center justify-center shadow-2xl">
-                  <span className="text-4xl">🌱</span>
-                  <span className="text-white text-[10px] font-bold mt-1 tracking-wide">ORGANIC</span>
+          {/* ── Right: Value Cards Grid (desktop only) ── */}
+          <div className="hidden lg:block">
+            <div className="grid grid-cols-2 gap-4">
+              {values.map((v, i) => (
+                <div key={v.name}
+                  className={`bg-gradient-to-br ${v.color} backdrop-blur-sm border border-white/20 rounded-2xl p-5 hover:border-white/40 hover:scale-[1.03] transition-all duration-300 cursor-default`}
+                  style={{ animationDelay: `${i * 0.1}s` }}>
+                  <span className="text-3xl block mb-2">{v.emoji}</span>
+                  <p className="text-white font-bold text-sm mb-0.5">{v.name}</p>
+                  <p className="text-white/55 text-[11px] leading-snug">{v.desc}</p>
                 </div>
-              </div>
-
-              {/* Orbit cards — uniform animation keeps circle alignment */}
-              {values.map((p, i) => {
-                const angle = (i / values.length) * 2 * Math.PI - Math.PI / 2
-                const r = 155
-                const x = Math.cos(angle) * r
-                const y = Math.sin(angle) * r
-                return (
-                  <div key={p.name}
-                    className="absolute animate-float"
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                      transform: 'translate(-50%, -50%)',
-                      animationDelay: `${i * 0.3}s`,
-                      animationDuration: '6s',
-                    }}>
-                    <div className={`w-[72px] h-[72px] rounded-2xl ${p.color} border ${p.border} backdrop-blur-sm flex flex-col items-center justify-center gap-1 shadow-lg hover:scale-110 transition-transform cursor-default`}>
-                      <span className="text-2xl">{p.emoji}</span>
-                      <span className="text-white/80 text-[9px] font-semibold text-center leading-tight px-1">{p.name}</span>
-                    </div>
-                  </div>
-                )
-              })}
+              ))}
             </div>
           </div>
 
