@@ -74,9 +74,11 @@ export function OrdersProvider({ children }) {
         )
         if (!match) return order
         const newStatus = STATUS_MAP[match.status] || match.status
-        const newNotes  = match.notes || order.notes || null
+        // Always use backend notes — null explicitly if backend has no notes
+        // (don't fall back to stale local notes)
+        const newNotes  = match.notes ?? null
         const newTotal  = Number(match.total)
-        // Always update if status, notes, or total changed
+        // Skip update only when nothing changed
         const noChange = newStatus === order.status
           && order.backendId === match.id
           && newTotal === Number(order.total)

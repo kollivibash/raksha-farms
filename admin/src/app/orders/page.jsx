@@ -173,23 +173,32 @@ export default function OrdersPage() {
     load({ page: 1, status: '', search: '', fromDate: '', toDate: '' })
   }
 
+  // Merge backend row into local orders — parses items/address from JSON if needed
+  function mergeUpdated(prev, id, updated) {
+    return prev.map(o => {
+      if (o.id !== id) return o
+      const items = Array.isArray(updated.items)
+        ? updated.items
+        : (() => { try { return JSON.parse(updated.items || '[]') } catch { return o.items || [] } })()
+      return { ...o, ...updated, items }
+    })
+  }
+
   async function changeStatus(id, newStatus) {
     try {
-      await ordersAPI.updateStatus(id, newStatus)
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+      const { data: updated } = await ordersAPI.updateStatus(id, newStatus)
+      setOrders(prev => mergeUpdated(prev, id, updated))
     } catch(e) { alert(e.response?.data?.error || 'Failed') }
   }
 
   async function handleRejectConfirm(orderId, newStatus, remarks, rejectedItems) {
     try {
-      await ordersAPI.updateStatus(orderId, newStatus, {
+      const { data: updated } = await ordersAPI.updateStatus(orderId, newStatus, {
         rejection_notes: remarks,
         rejected_items: rejectedItems,
       })
-      setOrders(prev => prev.map(o => o.id === orderId
-        ? { ...o, status: newStatus, notes: JSON.stringify({ remarks, rejected_items: rejectedItems }) }
-        : o
-      ))
+      // Use backend response directly — has correct total, enriched notes, and all fields
+      setOrders(prev => mergeUpdated(prev, orderId, updated))
       setRejectOrder(null)
     } catch(e) { alert(e.response?.data?.error || 'Failed to reject order') }
   }

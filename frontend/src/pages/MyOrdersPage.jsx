@@ -35,14 +35,13 @@ export default function MyOrdersPage() {
     if (savedAddr.phone) setPhoneInput(savedAddr.phone)
   }, [])
 
-  // Sync on mount
+  // Sync on mount + every 30s in background (picks up status/rejection changes from admin)
   useEffect(() => {
-    if (didSync.current) return
-    didSync.current = true
-
-    async function doSync() {
-      setSyncing(true)
-      setSyncMsg('Checking server for your orders…')
+    async function doSync(isMount = false) {
+      if (isMount) {
+        setSyncing(true)
+        setSyncMsg('Checking server for your orders…')
+      }
 
       // 1. JWT sync
       const token = localStorage.getItem('auth_token')
@@ -53,33 +52,34 @@ export default function MyOrdersPage() {
           })
           const data = await res.json()
           if (res.ok && Array.isArray(data)) {
-            setSyncMsg(`Server returned ${data.length} order(s) for your account`)
-            if (data.length > 0) {
-              await syncOrdersByUser()
-              setSyncing(false)
-              return
-            }
-          } else {
-            setSyncMsg(`Auth sync error: ${data?.error || res.status}`)
+            if (isMount) setSyncMsg(`Loaded ${data.length} order(s)`)
+            await syncOrdersByUser()
+            if (isMount) { setSyncing(false); return }
+            return
           }
-        } catch (e) {
-          setSyncMsg(`Auth sync failed: ${e.message}`)
-        }
-      } else {
-        setSyncMsg('No login token found — trying phone sync')
+        } catch { /* silent on background sync */ }
       }
 
       // 2. Phone sync fallback
       const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
       const phone = user?.phone || savedAddr.phone
       if (phone) {
-        setSyncMsg(`Searching by phone ${phone}…`)
+        if (isMount) setSyncMsg(`Searching by phone ${phone}…`)
         await syncOrdersByPhone(phone)
       }
 
-      setSyncing(false)
+      if (isMount) setSyncing(false)
     }
-    doSync()
+
+    // Run immediately on mount (only once — guards against React StrictMode double-fire)
+    if (!didSync.current) {
+      didSync.current = true
+      doSync(true)
+    }
+
+    // Background refresh every 30s to pick up admin changes (rejection, status updates)
+    const interval = setInterval(() => doSync(false), 30_000)
+    return () => clearInterval(interval)
   }, []) // eslint-disable-line
 
   async function handlePhoneSync() {
