@@ -16,8 +16,10 @@ export default function MyOrdersPage() {
   const { getOrdersByUser, syncOrdersByUser, syncOrdersByPhone } = useOrders()
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
+  const [syncing, setSyncing] = useState(false)
 
   const allOrders = getOrdersByUser(user?.email)
+  const hasToken = !!localStorage.getItem('auth_token')
 
   // Sync on every visit — by user_id first (all logged-in), phone fallback (guests)
   useEffect(() => {
@@ -25,6 +27,14 @@ export default function MyOrdersPage() {
     const phone = user?.phone || allOrders[0]?.customer?.phone
     if (phone) syncOrdersByPhone(phone)
   }, []) // eslint-disable-line
+
+  async function handleForceSync() {
+    setSyncing(true)
+    await syncOrdersByUser()
+    const phone = user?.phone || allOrders[0]?.customer?.phone
+    if (phone) await syncOrdersByPhone(phone)
+    setSyncing(false)
+  }
   const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
 
   const counts = allOrders.reduce((acc, o) => {
@@ -62,12 +72,25 @@ export default function MyOrdersPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => { logout(); navigate('/') }}
-          className="text-sm text-red-400 hover:text-red-600 font-medium transition-colors flex items-center gap-1.5 border border-red-100 hover:border-red-300 px-4 py-2 rounded-xl"
-        >
-          🚪 Sign Out
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleForceSync}
+            disabled={syncing}
+            title="Sync orders from server"
+            className="text-sm text-green-600 hover:text-green-700 font-medium transition-colors flex items-center gap-1.5 border border-green-100 hover:border-green-300 px-3 py-2 rounded-xl"
+          >
+            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? 'Syncing...' : 'Sync'}
+          </button>
+          <button
+            onClick={() => { logout(); navigate('/') }}
+            className="text-sm text-red-400 hover:text-red-600 font-medium transition-colors flex items-center gap-1.5 border border-red-100 hover:border-red-300 px-4 py-2 rounded-xl"
+          >
+            🚪 Sign Out
+          </button>
+        </div>
       </div>
 
       {/* Stats strip */}
@@ -118,7 +141,7 @@ export default function MyOrdersPage() {
 
       {/* Orders list */}
       {filtered.length === 0 ? (
-        <div className="text-center py-20">
+        <div className="text-center py-16">
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-lg font-bold text-gray-700 mb-2">
             {allOrders.length === 0 ? 'No orders yet' : 'No orders in this category'}
@@ -128,6 +151,38 @@ export default function MyOrdersPage() {
               ? 'Start shopping to see your orders here'
               : 'Try a different filter above'}
           </p>
+
+          {/* Re-login prompt when Google user has no auth token */}
+          {allOrders.length === 0 && !hasToken && user?.provider === 'google' && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left max-w-sm mx-auto">
+              <p className="text-sm font-semibold text-amber-800 mb-1">📱 Orders not syncing?</p>
+              <p className="text-xs text-amber-600 mb-4">
+                Your session token has expired. Sign out and sign back in with Google to restore your orders from all devices.
+              </p>
+              <button
+                onClick={() => { logout(); navigate('/login') }}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-colors"
+              >
+                🔄 Sign out &amp; Re-login to sync
+              </button>
+            </div>
+          )}
+
+          {/* Force sync button when token exists but 0 orders */}
+          {allOrders.length === 0 && hasToken && (
+            <button
+              onClick={handleForceSync}
+              disabled={syncing}
+              className="mb-4 px-5 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 font-semibold rounded-xl text-sm border border-green-200 transition-colors flex items-center gap-2 mx-auto"
+            >
+              {syncing ? (
+                <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Syncing...</>
+              ) : (
+                <><span>🔄</span> Refresh Orders</>
+              )}
+            </button>
+          )}
+
           {allOrders.length === 0 && (
             <Link to="/" className="btn-primary inline-flex items-center gap-2">
               <span>🌿</span> Shop Now
