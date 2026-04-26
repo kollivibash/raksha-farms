@@ -43,7 +43,7 @@ export default function MyOrdersPage() {
         setSyncMsg('Checking server for your orders…')
       }
 
-      // 1. JWT sync
+      // 1. JWT sync (always run if logged in)
       const token = localStorage.getItem('auth_token')
       if (token) {
         try {
@@ -54,17 +54,16 @@ export default function MyOrdersPage() {
           if (res.ok && Array.isArray(data)) {
             if (isMount) setSyncMsg(`Loaded ${data.length} order(s)`)
             await syncOrdersByUser()
-            if (isMount) { setSyncing(false); return }
-            return
           }
         } catch { /* silent on background sync */ }
       }
 
-      // 2. Phone sync fallback
+      // 2. Phone sync — ALWAYS run (not just as fallback) so rejection notes
+      //    are picked up even for orders originally synced by phone
       const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
       const phone = user?.phone || savedAddr.phone
       if (phone) {
-        if (isMount) setSyncMsg(`Searching by phone ${phone}…`)
+        if (isMount && !token) setSyncMsg(`Searching by phone ${phone}…`)
         await syncOrdersByPhone(phone)
       }
 
@@ -305,7 +304,7 @@ export default function MyOrdersPage() {
       {showDebug && debug && (
         <div className="mt-3 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-xs font-mono space-y-1 text-left">
           <p className="font-bold text-gray-600 mb-2">Sync Diagnostics</p>
-          <p>Backend version: <span className={debug.backendVersion?.includes('v10') ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{debug.backendVersion}</span></p>
+          <p>Backend version: <span className={debug.backendVersion?.includes('v12') || debug.backendVersion?.includes('v13') ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{debug.backendVersion}</span></p>
           <p>Has auth token: <span className={debug.hasToken ? 'text-green-600' : 'text-red-500'}>{String(debug.hasToken)}</span></p>
           <p>Logged in as: {debug.userEmail} ({debug.userProvider})</p>
           <p>Local orders: {debug.localOrders}</p>
