@@ -23,46 +23,6 @@ export function generateOrderId() {
   return `RF-${dd}-${mm}-${yyyy}-${hh}${min}${ss}-${_nextSeq()}`
 }
 
-export function generateWhatsAppMessage(order) {
-  const { customer, items, total, paymentMethod, orderId } = order
-
-  const itemLines = items
-    .map(
-      (item) =>
-        `  • ${item.name} — ${item.quantity} ${item.unit} × ₹${item.price} = *₹${(item.quantity * item.price).toFixed(0)}*`
-    )
-    .join('\n')
-
-  const payLabel = paymentMethod === 'upi' ? '💳 UPI' : '💵 Cash on Delivery'
-
-  const message = [
-    `🌿 *New Order — Raksha Farms*`,
-    ``,
-    `📦 *Order ID:* #${orderId}`,
-    `👤 *Customer:* ${customer.name}`,
-    `📞 *Phone:* ${customer.phone}`,
-    `📍 *Address:* ${customer.address}`,
-    ``,
-    `🛒 *Items Ordered:*`,
-    itemLines,
-    ``,
-    `💰 *Total Amount: ₹${total}*`,
-    `💳 *Payment: ${payLabel}*`,
-    ``,
-    `Please confirm the order and share delivery time 🙏`,
-    ``,
-    `_Sent from Raksha Farms website_`,
-  ].join('\n')
-
-  return encodeURIComponent(message)
-}
-
-export function openWhatsApp(order) {
-  const message = generateWhatsAppMessage(order)
-  const url = `https://wa.me/${OWNER_PHONE}?text=${message}`
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
-
 export function formatCurrency(amount) {
   return `₹${Number(amount).toFixed(0)}`
 }
