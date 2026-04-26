@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useOrders } from '../context/OrdersContext'
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
 const STATUS_STYLES = {
   pending:          { label: 'Pending',          icon: '⏳', bg: 'bg-yellow-50',  text: 'text-yellow-700',  border: 'border-yellow-200',  dot: 'bg-yellow-400' },
@@ -16,47 +18,121 @@ export default function MyOrdersPage() {
   const { getOrdersByUser, syncOrdersByUser, syncOrdersByPhone } = useOrders()
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
-  const [syncing, setSyncing] = useState(false)
+  const [syncing, setSyncing] = useState(true)
+  const [syncMsg, setSyncMsg] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneSyncing, setPhoneSyncing] = useState(false)
-  const [phoneSyncDone, setPhoneSyncDone] = useState(false)
-  const [showPhoneRecover, setShowPhoneRecover] = useState(false)
+  const [debug, setDebug] = useState(null)
+  const [showDebug, setShowDebug] = useState(false)
+  const didSync = useRef(false)
 
   const allOrders = getOrdersByUser(user?.email)
   const hasToken = !!localStorage.getItem('auth_token')
 
-  // Sync on every visit — by user_id (JWT), then by phone from saved address / profile / last order
+  // Pre-fill phone from saved address
   useEffect(() => {
-    syncOrdersByUser()
-    // Try every phone source available
     const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
-    const phone = user?.phone || savedAddr.phone || allOrders[0]?.customer?.phone
-    if (phone) syncOrdersByPhone(phone)
-  }, []) // eslint-disable-line
+    if (savedAddr.phone) setPhoneInput(savedAddr.phone)
+  }, [])
 
-  async function handleForceSync() {
-    setSyncing(true)
-    await syncOrdersByUser()
-    const phone = user?.phone || allOrders[0]?.customer?.phone
-    if (phone) await syncOrdersByPhone(phone)
-    setSyncing(false)
-  }
+  // Sync on mount
+  useEffect(() => {
+    if (didSync.current) return
+    didSync.current = true
+
+    async function doSync() {
+      setSyncing(true)
+      setSyncMsg('Checking server for your orders…')
+
+      // 1. JWT sync
+      const token = localStorage.getItem('auth_token')
+      if (token) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/orders/mine`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          const data = await res.json()
+          if (res.ok && Array.isArray(data)) {
+            setSyncMsg(`Server returned ${data.length} order(s) for your account`)
+            if (data.length > 0) {
+              await syncOrdersByUser()
+              setSyncing(false)
+              return
+            }
+          } else {
+            setSyncMsg(`Auth sync error: ${data?.error || res.status}`)
+          }
+        } catch (e) {
+          setSyncMsg(`Auth sync failed: ${e.message}`)
+        }
+      } else {
+        setSyncMsg('No login token found — trying phone sync')
+      }
+
+      // 2. Phone sync fallback
+      const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
+      const phone = user?.phone || savedAddr.phone
+      if (phone) {
+        setSyncMsg(`Searching by phone ${phone}…`)
+        await syncOrdersByPhone(phone)
+      }
+
+      setSyncing(false)
+    }
+    doSync()
+  }, []) // eslint-disable-line
 
   async function handlePhoneSync() {
     const digits = phoneInput.replace(/\D/g, '')
     if (digits.length < 10) return
     setPhoneSyncing(true)
+    setSyncMsg(`Searching orders for +91 ${digits}…`)
     await syncOrdersByPhone(digits)
     setPhoneSyncing(false)
-    setPhoneSyncDone(true)
-    setTimeout(() => setPhoneSyncDone(false), 3000)
+    setSyncMsg('')
   }
-  const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
 
-  const counts = allOrders.reduce((acc, o) => {
-    acc[o.status] = (acc[o.status] || 0) + 1
-    return acc
-  }, {})
+  async function handleForceSync() {
+    setSyncing(true)
+    await syncOrdersByUser()
+    const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
+    const phone = user?.phone || savedAddr.phone || allOrders[0]?.customer?.phone
+    if (phone) await syncOrdersByPhone(phone)
+    setSyncing(false)
+  }
+
+  async function loadDebug() {
+    const info = {
+      hasToken,
+      userEmail: user?.email,
+      userProvider: user?.provider,
+      localOrders: allOrders.length,
+      savedPhone: (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}').phone || 'none' } catch { return 'none' } })(),
+      backendVersion: null,
+      apiOrdersResult: null,
+    }
+    try {
+      const h = await fetch(`${BACKEND_URL}/health`)
+      const hd = await h.json()
+      info.backendVersion = hd.version
+    } catch { info.backendVersion = 'unreachable' }
+
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/orders/mine`, { headers: { Authorization: `Bearer ${token}` } })
+        const d = await r.json()
+        info.apiOrdersResult = r.ok ? `${d.length} orders returned` : `Error ${r.status}: ${d.error}`
+      } catch (e) { info.apiOrdersResult = `Failed: ${e.message}` }
+    } else {
+      info.apiOrdersResult = 'No token — skipped'
+    }
+    setDebug(info)
+    setShowDebug(true)
+  }
+
+  const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
+  const counts = allOrders.reduce((acc, o) => { acc[o.status] = (acc[o.status] || 0) + 1; return acc }, {})
 
   return (
     <div className="page-enter max-w-3xl mx-auto px-4 sm:px-6 py-10">
@@ -64,7 +140,6 @@ export default function MyOrdersPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
         <div className="flex items-center gap-4">
-          {/* Avatar */}
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-white font-black text-xl flex-shrink-0 shadow-sm overflow-hidden">
             {user?.avatar
               ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
@@ -89,33 +164,33 @@ export default function MyOrdersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleForceSync}
-            disabled={syncing}
-            title="Sync orders from server"
-            className="text-sm text-green-600 hover:text-green-700 font-medium transition-colors flex items-center gap-1.5 border border-green-100 hover:border-green-300 px-3 py-2 rounded-xl"
-          >
+          <button onClick={handleForceSync} disabled={syncing} title="Sync" className="text-sm text-green-600 border border-green-100 hover:border-green-300 px-3 py-2 rounded-xl flex items-center gap-1.5">
             <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            {syncing ? 'Syncing...' : 'Sync'}
+            {syncing ? 'Syncing…' : 'Sync'}
           </button>
-          <button
-            onClick={() => { logout(); navigate('/') }}
-            className="text-sm text-red-400 hover:text-red-600 font-medium transition-colors flex items-center gap-1.5 border border-red-100 hover:border-red-300 px-4 py-2 rounded-xl"
-          >
+          <button onClick={() => { logout(); navigate('/') }} className="text-sm text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 px-4 py-2 rounded-xl">
             🚪 Sign Out
           </button>
         </div>
       </div>
 
+      {/* Sync status bar */}
+      {syncMsg && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-blue-700 flex items-center gap-2">
+          {syncing && <svg className="animate-spin w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+          {syncMsg}
+        </div>
+      )}
+
       {/* Stats strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         {[
           { label: 'Total Orders', value: allOrders.length, icon: '📦' },
-          { label: 'Delivered', value: counts.delivered || 0, icon: '🎉' },
-          { label: 'In Progress', value: (counts.pending || 0) + (counts.accepted || 0) + (counts.out_for_delivery || 0), icon: '🚚' },
-          { label: 'Total Spent', value: `₹${allOrders.reduce((s, o) => s + o.total, 0)}`, icon: '💰' },
+          { label: 'Delivered',    value: counts.delivered || 0, icon: '🎉' },
+          { label: 'In Progress',  value: (counts.pending || 0) + (counts.accepted || 0) + (counts.out_for_delivery || 0), icon: '🚚' },
+          { label: 'Total Spent',  value: `₹${allOrders.reduce((s, o) => s + o.total, 0)}`, icon: '💰' },
         ].map(({ label, value, icon }) => (
           <div key={label} className="card p-4 text-center">
             <div className="text-2xl mb-1">{icon}</div>
@@ -124,6 +199,44 @@ export default function MyOrdersPage() {
           </div>
         ))}
       </div>
+
+      {/* ── PHONE SYNC PANEL (always visible when 0 orders or no token) ── */}
+      {(allOrders.length === 0 || !hasToken) && (
+        <div className="mb-6 bg-green-50 border-2 border-green-200 rounded-2xl p-5">
+          <p className="font-bold text-green-800 mb-1">📱 Find your orders by phone number</p>
+          <p className="text-sm text-green-600 mb-4">
+            Enter the mobile number you used when placing your orders
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="tel"
+              inputMode="numeric"
+              placeholder="Enter 10-digit mobile number"
+              value={phoneInput}
+              onChange={e => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              className="flex-1 border-2 border-green-200 focus:border-green-400 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none"
+            />
+            <button
+              onClick={handlePhoneSync}
+              disabled={phoneSyncing || phoneInput.replace(/\D/g,'').length < 10}
+              className="px-5 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap"
+            >
+              {phoneSyncing ? '…' : 'Find Orders'}
+            </button>
+          </div>
+          {allOrders.length === 0 && !hasToken && (
+            <div className="mt-4 pt-4 border-t border-green-200">
+              <p className="text-xs text-green-600 mb-2">Or sign in again to sync automatically:</p>
+              <button
+                onClick={() => { logout(); navigate('/login') }}
+                className="w-full py-2.5 bg-white border-2 border-green-300 hover:border-green-500 text-green-700 font-bold rounded-xl text-sm transition-colors"
+              >
+                🔄 Sign Out &amp; Sign In Again
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap mb-6">
@@ -137,19 +250,13 @@ export default function MyOrdersPage() {
           const s = STATUS_STYLES[id]
           const count = id === 'all' ? allOrders.length : counts[id] || 0
           return (
-            <button
-              key={id}
-              onClick={() => setFilter(id)}
+            <button key={id} onClick={() => setFilter(id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                filter === id
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300 hover:text-green-700'
+                filter === id ? 'bg-green-600 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300 hover:text-green-700'
               }`}
             >
               {s?.icon || '📋'} {label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                filter === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-              }`}>{count}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${filter === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
             </button>
           )
         })}
@@ -157,89 +264,16 @@ export default function MyOrdersPage() {
 
       {/* Orders list */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4">📦</div>
-          <h3 className="text-lg font-bold text-gray-700 mb-2">
-            {allOrders.length === 0 ? 'No orders yet' : 'No orders in this category'}
+        <div className="text-center py-12">
+          <div className="text-5xl mb-3">📦</div>
+          <h3 className="text-lg font-bold text-gray-700 mb-1">
+            {allOrders.length === 0 ? 'No orders found' : 'No orders in this category'}
           </h3>
           <p className="text-gray-400 text-sm mb-6">
             {allOrders.length === 0
-              ? 'Start shopping to see your orders here'
-              : 'Try a different filter above'}
+              ? 'Enter your phone number above to find past orders'
+              : 'Try a different filter'}
           </p>
-
-          {/* Re-login prompt when Google user has no auth token */}
-          {allOrders.length === 0 && !hasToken && user?.provider === 'google' && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left max-w-sm mx-auto">
-              <p className="text-sm font-semibold text-amber-800 mb-1">📱 Orders not syncing?</p>
-              <p className="text-xs text-amber-600 mb-4">
-                Your session token has expired. Sign out and sign back in with Google to restore your orders from all devices.
-              </p>
-              <button
-                onClick={() => { logout(); navigate('/login') }}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-colors"
-              >
-                🔄 Sign out &amp; Re-login to sync
-              </button>
-            </div>
-          )}
-
-          {/* Force sync button when token exists but 0 orders */}
-          {allOrders.length === 0 && hasToken && (
-            <button
-              onClick={handleForceSync}
-              disabled={syncing}
-              className="mb-4 px-5 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 font-semibold rounded-xl text-sm border border-green-200 transition-colors flex items-center gap-2 mx-auto"
-            >
-              {syncing ? (
-                <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Syncing...</>
-              ) : (
-                <><span>🔄</span> Refresh Orders</>
-              )}
-            </button>
-          )}
-
-          {/* Phone-based order recovery — always show when 0 orders */}
-          {allOrders.length === 0 && (
-            <div className="mb-6 max-w-sm mx-auto">
-              {!showPhoneRecover ? (
-                <button
-                  onClick={() => setShowPhoneRecover(true)}
-                  className="text-sm text-green-600 hover:underline font-medium"
-                >
-                  🔍 Find orders by phone number
-                </button>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-left">
-                  <p className="text-sm font-semibold text-green-800 mb-1">Find past orders</p>
-                  <p className="text-xs text-green-600 mb-3">Enter the mobile number you used when placing orders</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="tel"
-                      placeholder="10-digit mobile number"
-                      value={phoneInput}
-                      onChange={e => setPhoneInput(e.target.value)}
-                      className="flex-1 border border-green-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                      maxLength={10}
-                    />
-                    <button
-                      onClick={handlePhoneSync}
-                      disabled={phoneSyncing || phoneInput.replace(/\D/g,'').length < 10}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold rounded-xl text-sm transition-colors"
-                    >
-                      {phoneSyncing ? '...' : phoneSyncDone ? '✓' : 'Find'}
-                    </button>
-                  </div>
-                  {phoneSyncDone && (
-                    <p className="text-xs text-green-600 mt-2">
-                      {allOrders.length > 0 ? `✅ Found ${allOrders.length} order(s)!` : '⚠️ No orders found for this number'}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {allOrders.length === 0 && (
             <Link to="/" className="btn-primary inline-flex items-center gap-2">
               <span>🌿</span> Shop Now
@@ -254,12 +288,30 @@ export default function MyOrdersPage() {
         </div>
       )}
 
-      {/* Shop more */}
       {allOrders.length > 0 && (
         <div className="text-center mt-10">
           <Link to="/" className="btn-primary inline-flex items-center gap-2">
             <span>🛒</span> Continue Shopping
           </Link>
+        </div>
+      )}
+
+      {/* Debug panel */}
+      <div className="mt-10 text-center">
+        <button onClick={loadDebug} className="text-xs text-gray-300 hover:text-gray-400 underline">
+          show sync info
+        </button>
+      </div>
+      {showDebug && debug && (
+        <div className="mt-3 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-xs font-mono space-y-1 text-left">
+          <p className="font-bold text-gray-600 mb-2">Sync Diagnostics</p>
+          <p>Backend version: <span className={debug.backendVersion?.includes('v10') ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{debug.backendVersion}</span></p>
+          <p>Has auth token: <span className={debug.hasToken ? 'text-green-600' : 'text-red-500'}>{String(debug.hasToken)}</span></p>
+          <p>Logged in as: {debug.userEmail} ({debug.userProvider})</p>
+          <p>Local orders: {debug.localOrders}</p>
+          <p>Saved phone: {debug.savedPhone}</p>
+          <p>API result: <span className={debug.apiOrdersResult?.includes('Error') ? 'text-red-500' : 'text-green-600'}>{debug.apiOrdersResult}</span></p>
+          <button onClick={() => setShowDebug(false)} className="mt-2 text-gray-400 hover:text-gray-600">close</button>
         </div>
       )}
     </div>
@@ -270,105 +322,71 @@ function OrderCard({ order }) {
   const [expanded, setExpanded] = useState(false)
   const s = STATUS_STYLES[order.status] || STATUS_STYLES.pending
 
-  const formattedDate = new Date(order.createdAt).toLocaleString('en-IN', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  const formattedDate = order.createdAt
+    ? new Date(order.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'Unknown date'
 
   return (
     <div className={`card overflow-hidden border-l-4 ${s.border}`}>
-      {/* Summary row */}
-      <button
-        className="w-full text-left p-5"
-        onClick={() => setExpanded((v) => !v)}
-      >
+      <button className="w-full text-left p-5" onClick={() => setExpanded((v) => !v)}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
-              {s.icon}
-            </div>
+            <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>{s.icon}</div>
             <div>
-              <p className="font-bold text-gray-800 text-sm">
-                Order #{order.orderId}
-              </p>
+              <p className="font-bold text-gray-800 text-sm">Order #{order.orderId}</p>
               <p className="text-gray-400 text-xs mt-0.5">{formattedDate}</p>
             </div>
           </div>
-
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-right">
               <p className="font-black text-green-700 text-lg">₹{order.total}</p>
-              <p className="text-gray-400 text-xs">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</p>
+              <p className="text-gray-400 text-xs">{order.items?.length || 0} item(s)</p>
             </div>
             <span className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${s.bg} ${s.text}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
               {s.label}
             </span>
-            <svg
-              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
+            <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
         </div>
-
-        {/* Items preview */}
         <div className="flex gap-1.5 mt-3 flex-wrap">
-          {order.items.slice(0, 5).map((item) => (
-            <span key={item.id} className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full">
+          {(order.items || []).slice(0, 5).map((item, i) => (
+            <span key={i} className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full">
               {item.emoji} {item.name}
             </span>
           ))}
-          {order.items.length > 5 && (
-            <span className="text-xs text-gray-400 px-2 py-1">+{order.items.length - 5} more</span>
-          )}
+          {(order.items?.length || 0) > 5 && <span className="text-xs text-gray-400 px-2 py-1">+{order.items.length - 5} more</span>}
         </div>
       </button>
 
-      {/* Expanded details */}
       {expanded && (
-        <div className="border-t border-gray-50 px-5 pb-5 animate-slide-up">
-          {/* Delivery address */}
-          <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
-            <p className="font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
-              <span>📍</span> Delivery Address
-            </p>
-            <p className="text-gray-500">{order.customer.address}</p>
-            {order.customer.notes && (
-              <p className="text-gray-400 text-xs mt-1 italic">Note: {order.customer.notes}</p>
-            )}
-          </div>
-
-          {/* Items breakdown */}
-          <div className="mt-4">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Items</p>
-            <div className="space-y-2">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-gray-700">
-                    <span>{item.emoji}</span>
-                    <span>{item.name}</span>
-                    <span className="text-gray-400 text-xs">× {item.quantity} {item.unit}</span>
-                  </span>
-                  <span className="font-semibold text-gray-800">₹{item.price * item.quantity}</span>
-                </div>
-              ))}
+        <div className="border-t border-gray-50 px-5 pb-5">
+          {order.customer?.address && (
+            <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
+              <p className="font-semibold text-gray-700 mb-1">📍 Delivery Address</p>
+              <p className="text-gray-500">{order.customer.address}</p>
             </div>
-          </div>
-
-          {/* Totals */}
+          )}
+          {(order.items?.length > 0) && (
+            <div className="mt-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Items</p>
+              <div className="space-y-2">
+                {order.items.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <span>{item.emoji}</span><span>{item.name}</span>
+                      <span className="text-gray-400 text-xs">× {item.quantity} {item.unit}</span>
+                    </span>
+                    <span className="font-semibold text-gray-800">₹{item.price * item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-4 border-t pt-3 space-y-1 text-sm">
-            <div className="flex justify-between text-gray-500">
-              <span>Subtotal</span><span>₹{order.subtotal}</span>
-            </div>
-            <div className="flex justify-between text-gray-500">
-              <span>Delivery</span>
-              <span className={order.deliveryFee === 0 ? 'text-green-600 font-medium' : ''}>
-                {order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}
-              </span>
-            </div>
-            <div className="flex justify-between font-bold text-gray-800 border-t pt-2">
+            <div className="flex justify-between font-bold text-gray-800 pt-1">
               <span>Total</span>
               <span className="text-green-700">₹{order.total}</span>
             </div>
@@ -377,16 +395,6 @@ function OrderCard({ order }) {
               <span>{order.paymentMethod === 'upi' ? '📱 UPI' : '💵 Cash on Delivery'}</span>
             </div>
           </div>
-
-          {/* Delivery time if set */}
-          {order.deliveryTime && (
-            <div className="mt-3 flex items-center gap-2 bg-green-50 rounded-xl px-3 py-2.5">
-              <span>🕐</span>
-              <p className="text-sm text-green-700 font-medium">
-                Estimated delivery: {order.deliveryTime}
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>
