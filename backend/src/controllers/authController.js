@@ -75,6 +75,35 @@ export async function me(req, res) {
   }
 }
 
+// Google OAuth — find-or-create user, return JWT
+export async function googleAuth(req, res) {
+  try {
+    const { credential } = req.body
+    if (!credential) return res.status(400).json({ error: 'Google credential required' })
+
+    // Verify token with Google
+    const gRes = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${credential}`)
+    if (!gRes.ok) return res.status(401).json({ error: 'Invalid Google credential' })
+    const payload = await gRes.json()
+    if (!payload.email) return res.status(401).json({ error: 'No email in Google token' })
+
+    // Find or create user
+    let { rows } = await query('SELECT * FROM users WHERE email = $1', [payload.email.toLowerCase()])
+    let user = rows[0]
+    if (!user) {
+      const hashed = await bcrypt.hash(`google_${payload.sub}`, 10)
+      const { rows: created } = await query(
+        `INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,'user') RETURNING *`,
+        [payload.name || payload.email.split('@')[0], payload.email.toLowerCase(), hashed]
+      )
+      user = created[0]
+    }
+
+    const token = signToken(user)
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
 export async function changePassword(req, res) {
   try {
     const { currentPassword, newPassword } = req.body

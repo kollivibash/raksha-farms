@@ -2,25 +2,34 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { useOrders } from '../context/OrdersContext'
 
 export default function LoginPage() {
   const { loginWithEmail, signupWithEmail, renderGoogleButton, isLoggedIn, loading, googleReady } = useAuth()
   const { addToast } = useToast()
+  const { syncOrdersByUser } = useOrders()
   const navigate = useNavigate()
   const location = useLocation()
   const googleBtnRef = useRef(null)
 
-  const [tab, setTab] = useState('login')          // 'login' | 'signup'
-  const [form, setForm] = useState({ name: '', emailOrPhone: '', email: '', phone: '', password: '', confirm: '' })
+  const [tab, setTab] = useState('login')
+  const [form, setForm] = useState(() => {
+    const saved = localStorage.getItem('rf_remember_email') || ''
+    return { name: '', emailOrPhone: saved, email: '', phone: '', password: '', confirm: '' }
+  })
+  const [rememberMe, setRememberMe] = useState(!!localStorage.getItem('rf_remember_email'))
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
   const from = location.state?.from || '/'
 
-  // Redirect if already logged in
+  // Redirect if already logged in — also sync orders
   useEffect(() => {
-    if (isLoggedIn) navigate(from, { replace: true })
+    if (isLoggedIn) {
+      syncOrdersByUser()
+      navigate(from, { replace: true })
+    }
   }, [isLoggedIn, navigate, from])
 
   // Render Google button once GSI is ready
@@ -67,11 +76,16 @@ export default function LoginPage() {
     try {
       if (tab === 'login') {
         await loginWithEmail(form.emailOrPhone.trim(), form.password)
+        // Save email for remember me
+        if (rememberMe) localStorage.setItem('rf_remember_email', form.emailOrPhone.trim())
+        else localStorage.removeItem('rf_remember_email')
         addToast('Welcome back! 🌿', 'success')
       } else {
         await signupWithEmail(form.name, form.email, form.password, form.phone)
         addToast('Account created! Welcome to Raksha Farms 🌿', 'success')
       }
+      // Sync all past orders from backend immediately after login
+      setTimeout(() => syncOrdersByUser(), 500)
       navigate(from, { replace: true })
     } catch (err) {
       setErrors({ submit: err.message })
@@ -220,6 +234,21 @@ export default function LoginPage() {
               </div>
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
             </div>
+
+            {tab === 'login' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 accent-green-600 cursor-pointer"
+                />
+                <label htmlFor="rememberMe" className="text-sm text-gray-600 cursor-pointer select-none">
+                  Remember my email
+                </label>
+              </div>
+            )}
 
             {tab === 'signup' && (
               <AuthField

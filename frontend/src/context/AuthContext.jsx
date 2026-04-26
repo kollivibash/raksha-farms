@@ -45,17 +45,25 @@ export function AuthProvider({ children }) {
     if (!googleReady) return
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => {
+      callback: async (response) => {
         const payload = decodeJwt(response.credential)
         if (!payload) return
-        const googleUser = {
-          uid: payload.sub,
-          name: payload.name,
-          email: payload.email,
-          avatar: payload.picture,
-          provider: 'google',
-        }
-        setUser(googleUser)
+        try {
+          // Call backend to find/create user and get JWT token
+          const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: response.credential }),
+          })
+          const data = await res.json()
+          if (res.ok && data.token) {
+            localStorage.setItem('auth_token', data.token)
+            setUser({ ...data.user, avatar: payload.picture, provider: 'google' })
+            return
+          }
+        } catch { /* fallback below */ }
+        // Fallback — offline or backend down
+        setUser({ uid: payload.sub, name: payload.name, email: payload.email, avatar: payload.picture, provider: 'google' })
       },
     })
     const el = document.getElementById(containerId)
