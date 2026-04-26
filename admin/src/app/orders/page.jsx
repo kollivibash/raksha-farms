@@ -1,9 +1,9 @@
 'use client'
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import StatusBadge from '../../components/StatusBadge'
 import { ordersAPI } from '../../lib/api'
-import { Search, RefreshCw, Download, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import { Search, RefreshCw, Download, X, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react'
 
 const STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 const STATUS_LABELS = {
@@ -126,73 +126,95 @@ function RejectModal({ order, onClose, onConfirm }) {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function OrdersPage() {
-  const [orders, setOrders]   = useState([])
-  const [total, setTotal]     = useState(0)
-  const [page, setPage]       = useState(1)
-  const [status, setStatus]   = useState('')
-  const [search, setSearch]   = useState('')
+  const [orders, setOrders]     = useState([])
+  const [total, setTotal]       = useState(0)
+  const [page, setPage]         = useState(1)
+  const [status, setStatus]     = useState('')
+  const [search, setSearch]     = useState('')
   const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate]   = useState('')
-  const [loading, setLoading] = useState(true)
+  const [toDate, setToDate]     = useState('')
+  const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const [downloading, setDownloading] = useState(false)
+  const [toast, setToast]       = useState(null)  // { msg, type: 'success'|'error' }
+  const [tick, setTick]         = useState(0)     // increment to force a reload
 
+  // Keep latest filter state in a ref so async handlers always read fresh values
+  const filtersRef = useRef({ page, status, search, fromDate, toDate })
+  useEffect(() => { filtersRef.current = { page, status, search, fromDate, toDate } }, [page, status, search, fromDate, toDate])
+
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  // Central load — always reads fresh filters from ref
   const load = useCallback(async (overrides = {}) => {
     setLoading(true)
     try {
+      const f = filtersRef.current
       const params = {
-        page: overrides.page ?? page,
-        limit: 15,
-        status: overrides.status ?? status,
-        search: overrides.search ?? search,
-        from_date: overrides.fromDate ?? fromDate,
-        to_date: overrides.toDate ?? toDate,
+        page:      overrides.page      ?? f.page,
+        limit:     15,
+        status:    overrides.status    ?? f.status,
+        search:    overrides.search    ?? f.search,
+        from_date: overrides.fromDate  ?? f.fromDate,
+        to_date:   overrides.toDate    ?? f.toDate,
       }
-      // Remove empty params
-      Object.keys(params).forEach(k => !params[k] && delete params[k])
+      Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
       const { data } = await ordersAPI.getAll(params)
-      setOrders(data.orders || []); setTotal(data.total || 0)
-    } catch(e) { console.error(e) }
-    finally { setLoading(false) }
-  }, [page, status, search, fromDate, toDate])
+      setOrders(data.orders || [])
+      setTotal(data.total   || 0)
+    } catch(e) {
+      console.error('load error', e)
+    } finally {
+      setLoading(false)
+    }
+  }, []) // no deps — reads from ref
 
-  useEffect(() => { load() }, [page, status, fromDate, toDate]) // eslint-disable-line
+  // Re-run load whenever page/status/dates change OR tick is bumped
+  useEffect(() => { load() }, [page, status, fromDate, toDate, tick, load])
+
+  function forceReload() { setTick(t => t + 1) }
 
   function applySearch() { setPage(1); load({ page: 1, search }) }
 
   function changeFilter(key, val) {
     setPage(1)
-    if (key === 'status')   { setStatus(val);   load({ page: 1, status: val }) }
-    if (key === 'fromDate') { setFromDate(val);  load({ page: 1, fromDate: val }) }
-    if (key === 'toDate')   { setToDate(val);    load({ page: 1, toDate: val }) }
+    if (key === 'status')   setStatus(val)
+    if (key === 'fromDate') setFromDate(val)
+    if (key === 'toDate')   setToDate(val)
   }
 
   function clearFilters() {
     setStatus(''); setSearch(''); setFromDate(''); setToDate(''); setPage(1)
-    load({ page: 1, status: '', search: '', fromDate: '', toDate: '' })
+    forceReload()
   }
 
   async function changeStatus(id, newStatus) {
     try {
       await ordersAPI.updateStatus(id, newStatus)
-      // Optimistic local update, then reload for accuracy
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-      load()
-    } catch(e) { alert(e.response?.data?.error || 'Failed') }
+      forceReload()
+    } catch(e) {
+      showToast(e.response?.data?.error || 'Status update failed', 'error')
+    }
   }
 
   async function handleRejectConfirm(orderId, newStatus, remarks, rejectedItems) {
     try {
       await ordersAPI.updateStatus(orderId, newStatus, {
         rejection_notes: remarks,
-        rejected_items: rejectedItems,
+        rejected_items:  rejectedItems,
       })
       setRejectOrder(null)
-      // Reload orders from backend — guarantees correct total, notes, status
-      await load()
+      showToast(newStatus === 'rejected' ? 'Order rejected successfully' : 'Partial rejection saved')
+      forceReload()   // bump tick → triggers useEffect → calls load() with fresh filters
     } catch(e) {
-      alert(e.response?.data?.error || e.message || 'Failed to reject order')
+      const msg = e.response?.data?.error || e.message || 'Failed to reject order'
+      console.error('reject error:', e)
+      showToast(msg, 'error')
     }
   }
 
@@ -234,6 +256,15 @@ export default function OrdersPage() {
 
   return (
     <AdminLayout title="Orders">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-white text-sm font-semibold transition-all
+          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-500'}`}>
+          {toast.type === 'success' ? <CheckCircle size={16}/> : <AlertTriangle size={16}/>}
+          {toast.msg}
+        </div>
+      )}
+
       {/* Rejection modal */}
       {rejectOrder && (
         <RejectModal
@@ -270,7 +301,7 @@ export default function OrdersPage() {
           </div>
 
           {/* Refresh + Download */}
-          <button onClick={() => load()} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors" title="Refresh">
+          <button onClick={forceReload} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors" title="Refresh">
             <RefreshCw size={16} className={loading ? 'animate-spin text-gray-400' : 'text-gray-500'}/>
           </button>
           <button onClick={downloadCSV} disabled={downloading}
