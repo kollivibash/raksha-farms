@@ -17,6 +17,10 @@ export default function MyOrdersPage() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
   const [syncing, setSyncing] = useState(false)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneSyncing, setPhoneSyncing] = useState(false)
+  const [phoneSyncDone, setPhoneSyncDone] = useState(false)
+  const [showPhoneRecover, setShowPhoneRecover] = useState(false)
 
   const allOrders = getOrdersByUser(user?.email)
   const hasToken = !!localStorage.getItem('auth_token')
@@ -34,6 +38,16 @@ export default function MyOrdersPage() {
     const phone = user?.phone || allOrders[0]?.customer?.phone
     if (phone) await syncOrdersByPhone(phone)
     setSyncing(false)
+  }
+
+  async function handlePhoneSync() {
+    const digits = phoneInput.replace(/\D/g, '')
+    if (digits.length < 10) return
+    setPhoneSyncing(true)
+    await syncOrdersByPhone(digits)
+    setPhoneSyncing(false)
+    setPhoneSyncDone(true)
+    setTimeout(() => setPhoneSyncDone(false), 3000)
   }
   const filtered = filter === 'all' ? allOrders : allOrders.filter((o) => o.status === filter)
 
@@ -181,6 +195,47 @@ export default function MyOrdersPage() {
                 <><span>🔄</span> Refresh Orders</>
               )}
             </button>
+          )}
+
+          {/* Phone-based order recovery — always show when 0 orders */}
+          {allOrders.length === 0 && (
+            <div className="mb-6 max-w-sm mx-auto">
+              {!showPhoneRecover ? (
+                <button
+                  onClick={() => setShowPhoneRecover(true)}
+                  className="text-sm text-green-600 hover:underline font-medium"
+                >
+                  🔍 Find orders by phone number
+                </button>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-left">
+                  <p className="text-sm font-semibold text-green-800 mb-1">Find past orders</p>
+                  <p className="text-xs text-green-600 mb-3">Enter the mobile number you used when placing orders</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      placeholder="10-digit mobile number"
+                      value={phoneInput}
+                      onChange={e => setPhoneInput(e.target.value)}
+                      className="flex-1 border border-green-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                      maxLength={10}
+                    />
+                    <button
+                      onClick={handlePhoneSync}
+                      disabled={phoneSyncing || phoneInput.replace(/\D/g,'').length < 10}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-bold rounded-xl text-sm transition-colors"
+                    >
+                      {phoneSyncing ? '...' : phoneSyncDone ? '✓' : 'Find'}
+                    </button>
+                  </div>
+                  {phoneSyncDone && (
+                    <p className="text-xs text-green-600 mt-2">
+                      {allOrders.length > 0 ? `✅ Found ${allOrders.length} order(s)!` : '⚠️ No orders found for this number'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {allOrders.length === 0 && (

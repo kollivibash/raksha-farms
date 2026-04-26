@@ -8,13 +8,15 @@ export async function createOrder(req, res) {
     if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
 
     // Build address JSONB from customer object
+    // Email priority: authenticated JWT > customer form field > empty string
+    const emailForAddress = req.user?.email || customer?.email || ''
     const address = {
       name:    customer?.name    || '',
       phone:   customer?.phone   || '',
       address: customer?.address || '',
       notes:   customer?.notes   || notes || '',
       slot:    deliverySlot      || '',
-      email:   req.user?.email   || '',   // store email so we can re-link later
+      email:   emailForAddress,
     }
 
     // If not authenticated but email known, try linking to user
@@ -89,40 +91,43 @@ export async function updateOrderStatus(req, res) {
 // Authenticated: return all orders for the logged-in user (by user_id in DB)
 export async function getMyOrders(req, res) {
   try {
-    // First: auto-link any unlinked orders that match this user's email
+    // First: auto-link any unlinked orders that match this user's email (case-insensitive)
     await query(
       `UPDATE orders SET user_id=$1
        WHERE user_id IS NULL
-         AND (address->>'email' = $2 OR notes ILIKE $3)`,
+         AND (address->>'email' ILIKE $2 OR notes ILIKE $3)
+         AND address->>'email' != ''`,
       [req.user.id, req.user.email, `%${req.user.email}%`]
     ).catch(() => {}) // non-fatal
 
-    // Fetch all orders by user_id OR by email match in address JSON
+    // Fetch all orders by user_id OR by email match in address JSON (handles old unlinked orders)
     const { rows } = await query(
       `SELECT id, reference_id, status, total, delivery_fee, payment_method,
               items, address, notes, created_at, updated_at
        FROM orders
        WHERE user_id=$1
+          OR (user_id IS NULL AND address->>'email' ILIKE $2 AND address->>'email' != '')
        ORDER BY created_at DESC LIMIT 100`,
-      [req.user.id]
+      [req.user.id, req.user.email]
     )
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// Public: return status of all orders matching a phone number (last 60 days)
+// Public: return all orders matching a phone number (last 90 days) — full data for proper restore
 // No auth needed — phone number acts as the identifier for guest/user orders
 export async function getOrdersByPhone(req, res) {
   try {
     const phone = req.params.phone.replace(/\D/g, '').slice(-10)
     if (phone.length < 8) return res.status(400).json({ error: 'Invalid phone' })
     const { rows } = await query(
-      `SELECT id, reference_id, status, total, created_at, updated_at
+      `SELECT id, reference_id, status, total, delivery_fee, payment_method,
+              items, address, notes, created_at, updated_at
        FROM orders
        WHERE address->>'phone' LIKE $1
-         AND created_at > NOW() - INTERVAL '60 days'
+         AND created_at > NOW() - INTERVAL '90 days'
        ORDER BY created_at DESC
-       LIMIT 30`,
+       LIMIT 50`,
       [`%${phone}`]
     )
     res.json(rows)
