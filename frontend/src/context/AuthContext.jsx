@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useOrders } from './OrdersContext'
 
 export const GOOGLE_CLIENT_ID = '626173903642-l61p32jrfj8b22qlaeotf157ptt1vvp3.apps.googleusercontent.com'
 
@@ -14,6 +15,8 @@ function decodeJwt(token) {
 }
 
 export function AuthProvider({ children }) {
+  const { syncOrdersByUser, syncOrdersByPhone } = useOrders()
+
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('rf_auth_user')
@@ -28,6 +31,31 @@ export function AuthProvider({ children }) {
     if (user) localStorage.setItem('rf_auth_user', JSON.stringify(user))
     else localStorage.removeItem('rf_auth_user')
   }, [user])
+
+  // On mount: if Google user exists in localStorage but has no auth_token,
+  // clear the stale session to force a clean re-login that stores a real JWT
+  useEffect(() => {
+    const saved = localStorage.getItem('rf_auth_user')
+    if (!saved) return
+    try {
+      const u = JSON.parse(saved)
+      if (u?.provider === 'google' && !localStorage.getItem('auth_token')) {
+        localStorage.removeItem('rf_auth_user')
+        setUser(null)
+      }
+    } catch { /* ignore */ }
+  }, []) // eslint-disable-line
+
+  // After any login: sync orders immediately using every available method
+  function syncAllOrders(phone = null) {
+    syncOrdersByUser()
+    // Also sync by phone from saved address (works even before orders load)
+    const savedAddr = (() => {
+      try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} }
+    })()
+    const p = phone || savedAddr.phone
+    if (p) syncOrdersByPhone(p)
+  }
 
   // Wait for Google GSI script to load
   useEffect(() => {
@@ -58,11 +86,14 @@ export function AuthProvider({ children }) {
           const data = await res.json()
           if (res.ok && data.token) {
             localStorage.setItem('auth_token', data.token)
-            setUser({ ...data.user, avatar: payload.picture, provider: 'google' })
+            const loggedUser = { ...data.user, avatar: payload.picture, provider: 'google' }
+            setUser(loggedUser)
+            // Sync orders immediately — auth_token is now in localStorage
+            setTimeout(() => syncAllOrders(), 300)
             return
           }
         } catch { /* fallback below */ }
-        // Fallback — offline or backend down
+        // Fallback — backend down (no JWT stored, sync won't work across devices)
         setUser({ uid: payload.sub, name: payload.name, email: payload.email, avatar: payload.picture, provider: 'google' })
       },
     })
@@ -76,9 +107,9 @@ export function AuthProvider({ children }) {
         shape: 'rectangular',
       })
     }
-  }, [googleReady])
+  }, [googleReady]) // eslint-disable-line
 
-  // ─── Email/Phone Sign Up → saves to backend database ──────────────
+  // ─── Email/Phone Sign Up ───────────────────────────────────────────
   async function signupWithEmail(name, email, password, phone = '') {
     setLoading(true)
     try {
@@ -92,17 +123,17 @@ export function AuthProvider({ children }) {
       localStorage.setItem('auth_token', data.token)
       const newUser = { ...data.user, provider: 'email' }
       setUser(newUser)
+      setTimeout(() => syncAllOrders(phone), 300)
       return newUser
     } finally {
       setLoading(false)
     }
   }
 
-  // ─── Email or Phone Login → validates against backend database ─────
+  // ─── Email or Phone Login ──────────────────────────────────────────
   async function loginWithEmail(emailOrPhone, password) {
     setLoading(true)
     try {
-      // Detect if the identifier looks like a phone number (digits / starts with +91)
       const isPhone = /^[+\d]/.test(emailOrPhone) && !/[@]/.test(emailOrPhone)
       const body = isPhone
         ? { phone: emailOrPhone, password }
@@ -114,11 +145,11 @@ export function AuthProvider({ children }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Login failed')
-      // Customer login: role must be 'user' (admin login goes through separate admin panel)
       if (data.user.role === 'admin') throw new Error('Please use the admin panel to sign in.')
       localStorage.setItem('auth_token', data.token)
       const loggedUser = { ...data.user, provider: 'email' }
       setUser(loggedUser)
+      setTimeout(() => syncAllOrders(isPhone ? emailOrPhone : null), 300)
       return loggedUser
     } finally {
       setLoading(false)

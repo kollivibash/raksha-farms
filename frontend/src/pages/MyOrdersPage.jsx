@@ -25,10 +25,12 @@ export default function MyOrdersPage() {
   const allOrders = getOrdersByUser(user?.email)
   const hasToken = !!localStorage.getItem('auth_token')
 
-  // Sync on every visit — by user_id first (all logged-in), phone fallback (guests)
+  // Sync on every visit — by user_id (JWT), then by phone from saved address / profile / last order
   useEffect(() => {
     syncOrdersByUser()
-    const phone = user?.phone || allOrders[0]?.customer?.phone
+    // Try every phone source available
+    const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
+    const phone = user?.phone || savedAddr.phone || allOrders[0]?.customer?.phone
     if (phone) syncOrdersByPhone(phone)
   }, []) // eslint-disable-line
 
