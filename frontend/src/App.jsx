@@ -1,6 +1,13 @@
 // v2
-import React from 'react'
+import React, { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+
+// Scroll to top on every route change
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  return null
+}
 import { ToastProvider }    from './context/ToastContext'
 import { CartProvider }     from './context/CartContext'
 import { ProductsProvider } from './context/ProductsContext'
@@ -46,6 +53,7 @@ export default function App() {
             <CartProvider>
               <AuthProvider>
                 <Router>
+                  <ScrollToTop />
                   <div className="min-h-screen bg-sage-50 font-poppins flex flex-col">
                     <Navbar />
                     <CartDrawer />
