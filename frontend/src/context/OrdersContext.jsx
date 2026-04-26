@@ -85,17 +85,19 @@ export function OrdersProvider({ children }) {
         changed = true
         const restored = missing.map(b => {
           const addr = typeof b.address === 'string' ? (() => { try { return JSON.parse(b.address) } catch { return {} } })() : (b.address || {})
+          const parsedItems = Array.isArray(b.items) ? b.items : (() => { try { return JSON.parse(b.items || '[]') } catch { return [] } })()
           return {
             orderId:       b.reference_id || b.id,
             backendId:     b.id,
             status:        STATUS_MAP[b.status] || b.status,
             total:         Number(b.total),
             deliveryFee:   Number(b.delivery_fee || 0),
-            items:         Array.isArray(b.items) ? b.items : (() => { try { return JSON.parse(b.items || '[]') } catch { return [] } })(),
+            items:         parsedItems,
             customer:      addr,
+            userEmail:     addr.email || '',
             paymentMethod: b.payment_method,
             createdAt:     b.created_at,
-            updatedAt:     b.created_at,
+            updatedAt:     b.updated_at || b.created_at,
           }
         })
         return [...restored, ...next]

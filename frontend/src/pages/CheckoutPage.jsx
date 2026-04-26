@@ -116,6 +116,7 @@ export default function CheckoutPage() {
       phone:   form.phone.trim(),
       address: `${form.address.trim()}, ${form.city.trim()} — ${form.pincode.trim()}`,
       notes:   form.notes.trim(),
+      email:   user?.email || '',
     }
     const items = cart.map((item) => ({
       id:       item.id,

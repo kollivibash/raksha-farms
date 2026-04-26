@@ -14,13 +14,21 @@ export async function createOrder(req, res) {
       address: customer?.address || '',
       notes:   customer?.notes   || notes || '',
       slot:    deliverySlot      || '',
+      email:   req.user?.email   || '',   // store email so we can re-link later
+    }
+
+    // If not authenticated but email known, try linking to user
+    let userId = req.user?.id || null
+    if (!userId && customer?.email) {
+      const { rows: u } = await query('SELECT id FROM users WHERE email=$1', [customer.email.toLowerCase()]).catch(() => ({ rows: [] }))
+      if (u[0]) userId = u[0].id
     }
 
     const { rows } = await query(
       `INSERT INTO orders (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes, reference_id)
        VALUES ($1, $2, $3, $4, $5, 'placed', $6, $7, $8, $9) RETURNING *`,
       [
-        req.user?.id || null,
+        userId,
         JSON.stringify(items),
         subtotal  || total,
         deliveryFee || 0,
@@ -81,9 +89,21 @@ export async function updateOrderStatus(req, res) {
 // Authenticated: return all orders for the logged-in user (by user_id in DB)
 export async function getMyOrders(req, res) {
   try {
+    // First: auto-link any unlinked orders that match this user's email
+    await query(
+      `UPDATE orders SET user_id=$1
+       WHERE user_id IS NULL
+         AND (address->>'email' = $2 OR notes ILIKE $3)`,
+      [req.user.id, req.user.email, `%${req.user.email}%`]
+    ).catch(() => {}) // non-fatal
+
+    // Fetch all orders by user_id OR by email match in address JSON
     const { rows } = await query(
-      `SELECT id, reference_id, status, total, created_at, updated_at
-       FROM orders WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+      `SELECT id, reference_id, status, total, delivery_fee, payment_method,
+              items, address, notes, created_at, updated_at
+       FROM orders
+       WHERE user_id=$1
+       ORDER BY created_at DESC LIMIT 100`,
       [req.user.id]
     )
     res.json(rows)
