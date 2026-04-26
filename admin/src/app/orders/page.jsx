@@ -45,7 +45,7 @@ function RejectModal({ order, onClose, onConfirm }) {
     setSubmitting(true)
     const rejectedItems = items
       .filter((_, i) => checkedIds.has(i))
-      .map(item => ({ id: item.id, name: item.name, quantity: item.quantity }))
+      .map(item => ({ id: item.id, name: item.name, quantity: item.quantity, price: item.price, unit: item.unit, emoji: item.emoji }))
     const newStatus = allSelected ? 'rejected' : 'accepted'
     await onConfirm(newStatus, remarks, rejectedItems)
     setSubmitting(false)

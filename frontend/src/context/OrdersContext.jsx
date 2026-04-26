@@ -68,14 +68,29 @@ export function OrdersProvider({ children }) {
       const next = prev.map(order => {
         const match = backendOrders.find(b =>
           (b.reference_id && b.reference_id === order.orderId) ||
+          (b.id && b.id === order.backendId) ||
           (Math.abs(Number(b.total) - Number(order.total)) < 1 &&
            Math.abs(new Date(b.created_at) - new Date(order.createdAt)) < 10 * 60 * 1000)
         )
         if (!match) return order
         const newStatus = STATUS_MAP[match.status] || match.status
-        if (newStatus === order.status && order.backendId === match.id) return order
+        const newNotes  = match.notes || order.notes || null
+        const newTotal  = Number(match.total)
+        // Always update if status, notes, or total changed
+        const noChange = newStatus === order.status
+          && order.backendId === match.id
+          && newTotal === Number(order.total)
+          && newNotes === order.notes
+        if (noChange) return order
         changed = true
-        return { ...order, status: newStatus, backendId: match.id, updatedAt: new Date().toISOString() }
+        return {
+          ...order,
+          status:    newStatus,
+          backendId: match.id,
+          total:     newTotal,
+          notes:     newNotes,
+          updatedAt: new Date().toISOString(),
+        }
       })
       // Step 2: add backend orders not present locally (restores cleared localStorage)
       const localIds  = new Set(next.map(o => o.backendId).filter(Boolean))
@@ -96,6 +111,7 @@ export function OrdersProvider({ children }) {
             customer:      addr,
             userEmail:     addr.email || '',
             paymentMethod: b.payment_method,
+            notes:         b.notes || null,
             createdAt:     b.created_at,
             updatedAt:     b.updated_at || b.created_at,
           }

@@ -86,21 +86,68 @@ export async function updateOrderStatus(req, res) {
     if (!VALID_STATUSES.includes(status))
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` })
 
-    // Fetch current order to get items for stock restore
+    // Fetch current order
     const { rows: existing } = await query('SELECT * FROM orders WHERE id=$1', [req.params.id])
     if (!existing[0]) return res.status(404).json({ error: 'Order not found' })
 
-    // Build rejection metadata to store in notes column
-    let notesPayload = rejection_notes || existing[0].notes || ''
+    const ord = existing[0]
+
+    // Parse full items list (to look up prices for rejected items)
+    const fullItems = (() => {
+      try { return Array.isArray(ord.items) ? ord.items : JSON.parse(ord.items || '[]') }
+      catch { return [] }
+    })()
+
+    // --- Rejection logic ---
+    let notesPayload = rejection_notes || ord.notes || ''
+    let newTotal = null // only set when rejection changes the total
+
     if (rejected_items?.length) {
-      notesPayload = JSON.stringify({ remarks: rejection_notes || '', rejected_items })
+      // Enrich rejected_items with price from stored order items
+      const enriched = rejected_items.map(ri => {
+        const found = fullItems.find(fi => fi.id === ri.id || fi.name === ri.name)
+        return {
+          id:       ri.id || found?.id,
+          name:     ri.name || found?.name,
+          quantity: ri.quantity ?? found?.quantity ?? 1,
+          unit:     found?.unit || '',
+          emoji:    found?.emoji || '',
+          price:    found?.price ?? ri.price ?? 0,
+        }
+      })
+
+      // Calculate how much was rejected
+      const rejectedAmount = enriched.reduce((sum, ri) => sum + (ri.price * ri.quantity), 0)
+      const originalTotal  = Number(ord.total)
+      const deliveryFee    = Number(ord.delivery_fee || 0)
+      const allRejected    = enriched.length >= fullItems.length
+
+      // New total = original minus rejected items cost; if all rejected → 0
+      const adjustedTotal = allRejected
+        ? 0
+        : Math.max(deliveryFee, originalTotal - rejectedAmount)
+
+      newTotal = adjustedTotal
+
+      notesPayload = JSON.stringify({
+        remarks:        rejection_notes || '',
+        rejected_items: enriched,
+        original_total: originalTotal,
+        rejected_amount: rejectedAmount,
+        adjusted_total: adjustedTotal,
+      })
     }
 
     const updateFields = ['status=$1', 'updated_at=NOW()']
     const updateParams = [status]
-    if (notesPayload !== existing[0].notes) {
+
+    if (notesPayload !== ord.notes) {
       updateFields.push(`notes=$${updateParams.length + 1}`)
       updateParams.push(notesPayload)
+    }
+    if (newTotal !== null) {
+      updateFields.push(`total=$${updateParams.length + 1}`)
+      updateParams.push(newTotal)
     }
     if (delivery_time) {
       updateFields.push(`delivery_time=$${updateParams.length + 1}`)
@@ -113,13 +160,13 @@ export async function updateOrderStatus(req, res) {
       updateParams
     )
 
-    // Restore stock for rejected items
-    if ((status === 'rejected' || status === 'cancelled') && rejected_items?.length) {
+    // Restore stock for every rejected item (partial or full rejection)
+    if (rejected_items?.length) {
       for (const item of rejected_items) {
         await query(
           `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
           [item.quantity || 1, item.id]
-        ).catch(() => {}) // non-fatal
+        ).catch(() => {})
       }
     }
 

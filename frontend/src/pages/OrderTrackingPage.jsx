@@ -17,6 +17,16 @@ const STATUS_INDEX = {
   rejected:         -1,
 }
 
+// Parse rejection metadata stored in order.notes
+function parseRejectionInfo(notes) {
+  if (!notes) return null
+  try {
+    const parsed = typeof notes === 'string' ? JSON.parse(notes) : notes
+    if (parsed?.rejected_items?.length) return parsed
+  } catch { /* plain text */ }
+  return null
+}
+
 
 export default function OrderTrackingPage() {
   const { orderId } = useParams()
@@ -49,8 +59,14 @@ export default function OrderTrackingPage() {
     )
   }
 
-  const currentStep = STATUS_INDEX[order.status] ?? 0
-  const isRejected  = order.status === 'rejected'
+  const currentStep       = STATUS_INDEX[order.status] ?? 0
+  const isRejected        = order.status === 'rejected'
+  const rejInfo           = parseRejectionInfo(order.notes)
+  const hasPartialReject  = !!rejInfo && order.status === 'accepted'
+
+  function isItemRejected(item) {
+    return rejInfo?.rejected_items?.some(r => r.id === item.id || r.name === item.name)
+  }
 
   return (
     <div className="page-enter max-w-2xl mx-auto px-4 sm:px-6 py-8 pb-24 md:pb-8">
@@ -77,12 +93,33 @@ export default function OrderTrackingPage() {
         <p className="text-gray-400 text-sm mt-0.5">Order #{order.orderId.slice(-12)}</p>
       </div>
 
+      {/* Partial rejection alert — appears above tracker when some items rejected */}
+      {hasPartialReject && (
+        <div className="card p-5 mb-5 bg-orange-50 border border-orange-200">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <div>
+              <h3 className="font-bold text-orange-700">Some items were not available</h3>
+              {rejInfo.remarks && (
+                <p className="text-sm text-orange-600 mt-1">"{rejInfo.remarks}"</p>
+              )}
+              <p className="text-xs text-orange-500 mt-2">
+                Your order will be delivered with the available items. The price has been adjusted accordingly.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status tracker */}
       {isRejected ? (
         <div className="card p-6 mb-5 text-center bg-red-50 border border-red-200">
           <p className="text-4xl mb-3">❌</p>
           <h2 className="font-bold text-red-700 text-lg">Order Rejected</h2>
-          <p className="text-red-500 text-sm mt-1">This order could not be fulfilled. Please contact us for assistance.</p>
+          {rejInfo?.remarks && (
+            <p className="text-red-600 text-sm mt-1 font-medium">"{rejInfo.remarks}"</p>
+          )}
+          <p className="text-red-400 text-sm mt-2">This order could not be fulfilled. Please contact us for assistance.</p>
           <a href="tel:+919346566945" className="btn-primary mt-4 inline-flex bg-red-500 hover:bg-red-600">
             Call Support
           </a>
@@ -173,29 +210,52 @@ export default function OrderTrackingPage() {
 
         {/* Items */}
         <div className="border-t pt-4 space-y-2">
-          {order.items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <span>{item.emoji || '🌿'}</span>
-                <span className="font-medium">{item.name}</span>
-                <span className="text-gray-400">×{item.quantity} {item.unit}</span>
+          {order.items.map((item) => {
+            const rejected = isItemRejected(item)
+            return (
+              <div key={item.id || item.name} className={`flex items-center justify-between text-sm rounded-lg px-2 py-1.5 ${rejected ? 'bg-red-50' : ''}`}>
+                <div className={`flex items-center gap-2 ${rejected ? 'text-red-400' : 'text-gray-600'}`}>
+                  <span>{item.emoji || '🌿'}</span>
+                  <span className={`font-medium ${rejected ? 'line-through' : ''}`}>{item.name}</span>
+                  <span className={`text-xs ${rejected ? 'text-red-300' : 'text-gray-400'}`}>×{item.quantity} {item.unit}</span>
+                  {rejected && (
+                    <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">Not available</span>
+                  )}
+                </div>
+                <span className={`font-semibold ${rejected ? 'text-red-400 line-through' : 'text-gray-800'}`}>
+                  ₹{item.price * item.quantity}
+                </span>
               </div>
-              <span className="font-semibold text-gray-800">₹{item.price * item.quantity}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Totals */}
-        <div className="border-t mt-3 pt-3 space-y-1 text-sm">
-          <div className="flex justify-between text-gray-500">
-            <span>Subtotal</span><span>₹{order.subtotal}</span>
-          </div>
+        <div className="border-t mt-3 pt-3 space-y-1.5 text-sm">
+          {/* Show original total crossed out if a partial rejection changed the price */}
+          {rejInfo?.original_total && rejInfo.original_total !== order.total && (
+            <div className="flex justify-between text-gray-400 text-xs">
+              <span>Original Total</span>
+              <span className="line-through">₹{rejInfo.original_total}</span>
+            </div>
+          )}
+          {rejInfo?.rejected_amount > 0 && (
+            <div className="flex justify-between text-red-500 text-xs">
+              <span>Deducted (items not available)</span>
+              <span>− ₹{rejInfo.rejected_amount}</span>
+            </div>
+          )}
+          {!rejInfo && (
+            <div className="flex justify-between text-gray-500">
+              <span>Subtotal</span><span>₹{order.subtotal}</span>
+            </div>
+          )}
           <div className="flex justify-between text-gray-500">
             <span>Delivery</span>
             <span>{order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}</span>
           </div>
-          <div className="flex justify-between font-bold text-gray-800 text-base border-t pt-2 mt-2">
-            <span>Total</span>
+          <div className="flex justify-between font-bold text-gray-800 text-base border-t pt-2 mt-1">
+            <span>Amount to Pay</span>
             <span className="text-forest-500">₹{order.total}</span>
           </div>
         </div>

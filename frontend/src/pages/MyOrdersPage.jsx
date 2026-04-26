@@ -318,33 +318,61 @@ export default function MyOrdersPage() {
   )
 }
 
+// Parse rejection info from order.notes JSON
+function parseRejectionInfo(notes) {
+  if (!notes) return null
+  try {
+    const parsed = typeof notes === 'string' ? JSON.parse(notes) : notes
+    if (parsed?.rejected_items?.length) return parsed
+  } catch { /* not JSON */ }
+  return null
+}
+
 function OrderCard({ order }) {
   const [expanded, setExpanded] = useState(false)
   const s = STATUS_STYLES[order.status] || STATUS_STYLES.pending
+
+  const rejInfo = parseRejectionInfo(order.notes)
+  const hasPartialRejection = rejInfo && order.status === 'accepted'
+  const hasFullRejection    = rejInfo && order.status === 'rejected'
 
   const formattedDate = order.createdAt
     ? new Date(order.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'Unknown date'
 
+  // Check if an item was rejected
+  function isItemRejected(item) {
+    return rejInfo?.rejected_items?.some(r => r.id === item.id || r.name === item.name)
+  }
+
   return (
-    <div className={`card overflow-hidden border-l-4 ${s.border}`}>
+    <div className={`card overflow-hidden border-l-4 ${hasPartialRejection ? 'border-orange-300' : s.border}`}>
       <button className="w-full text-left p-5" onClick={() => setExpanded((v) => !v)}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>{s.icon}</div>
+            <div className={`w-10 h-10 ${hasPartialRejection ? 'bg-orange-50' : s.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
+              {hasPartialRejection ? '⚠️' : s.icon}
+            </div>
             <div>
               <p className="font-bold text-gray-800 text-sm">Order #{order.orderId}</p>
               <p className="text-gray-400 text-xs mt-0.5">{formattedDate}</p>
+              {hasPartialRejection && (
+                <p className="text-orange-600 text-xs font-semibold mt-0.5">⚠️ Some items were not available</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-right">
+              {/* Show original price crossed if total changed */}
+              {rejInfo?.original_total && rejInfo.original_total !== order.total && (
+                <p className="text-gray-400 text-xs line-through">₹{rejInfo.original_total}</p>
+              )}
               <p className="font-black text-green-700 text-lg">₹{order.total}</p>
               <p className="text-gray-400 text-xs">{order.items?.length || 0} item(s)</p>
             </div>
-            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${s.bg} ${s.text}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-              {s.label}
+            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${hasPartialRejection ? 'bg-orange-50 text-orange-700' : `${s.bg} ${s.text}`}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${hasPartialRejection ? 'bg-orange-400' : s.dot}`} />
+              {hasPartialRejection ? 'Partial' : s.label}
             </span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -352,43 +380,90 @@ function OrderCard({ order }) {
           </div>
         </div>
         <div className="flex gap-1.5 mt-3 flex-wrap">
-          {(order.items || []).slice(0, 5).map((item, i) => (
-            <span key={i} className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full">
-              {item.emoji} {item.name}
-            </span>
-          ))}
+          {(order.items || []).slice(0, 5).map((item, i) => {
+            const rejected = isItemRejected(item)
+            return (
+              <span key={i} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full ${rejected ? 'bg-red-50 text-red-400 line-through' : 'bg-gray-50 text-gray-600'}`}>
+                {item.emoji} {item.name}
+                {rejected && <span className="no-underline ml-0.5 text-red-400">✕</span>}
+              </span>
+            )
+          })}
           {(order.items?.length || 0) > 5 && <span className="text-xs text-gray-400 px-2 py-1">+{order.items.length - 5} more</span>}
         </div>
       </button>
 
       {expanded && (
         <div className="border-t border-gray-50 px-5 pb-5">
+          {/* Rejection notice banner */}
+          {(hasPartialRejection || hasFullRejection) && (
+            <div className={`mt-4 rounded-xl p-4 border ${hasPartialRejection ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+              <p className={`font-bold text-sm mb-1 ${hasPartialRejection ? 'text-orange-700' : 'text-red-700'}`}>
+                {hasPartialRejection ? '⚠️ Partial Order — Some Items Not Available' : '❌ Order Rejected'}
+              </p>
+              {rejInfo?.remarks && (
+                <p className={`text-sm ${hasPartialRejection ? 'text-orange-600' : 'text-red-600'}`}>
+                  "{rejInfo.remarks}"
+                </p>
+              )}
+              {hasPartialRejection && rejInfo?.rejected_amount > 0 && (
+                <p className="text-xs text-orange-500 mt-1">
+                  ₹{rejInfo.rejected_amount} deducted for unavailable items
+                </p>
+              )}
+            </div>
+          )}
+
           {order.customer?.address && (
             <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
               <p className="font-semibold text-gray-700 mb-1">📍 Delivery Address</p>
               <p className="text-gray-500">{order.customer.address}</p>
             </div>
           )}
+
           {(order.items?.length > 0) && (
             <div className="mt-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Items</p>
               <div className="space-y-2">
-                {order.items.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 text-gray-700">
-                      <span>{item.emoji}</span><span>{item.name}</span>
-                      <span className="text-gray-400 text-xs">× {item.quantity} {item.unit}</span>
-                    </span>
-                    <span className="font-semibold text-gray-800">₹{item.price * item.quantity}</span>
-                  </div>
-                ))}
+                {order.items.map((item, i) => {
+                  const rejected = isItemRejected(item)
+                  return (
+                    <div key={i} className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${rejected ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <span className={`flex items-center gap-2 ${rejected ? 'text-red-400 line-through' : 'text-gray-700'}`}>
+                        <span>{item.emoji}</span>
+                        <span>{item.name}</span>
+                        <span className={`text-xs ${rejected ? 'text-red-300' : 'text-gray-400'}`}>× {item.quantity} {item.unit}</span>
+                      </span>
+                      <div className="text-right">
+                        <span className={`font-semibold ${rejected ? 'text-red-400 line-through' : 'text-gray-800'}`}>
+                          ₹{item.price * item.quantity}
+                        </span>
+                        {rejected && <span className="ml-1.5 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold no-underline">Not available</span>}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
-          <div className="mt-4 border-t pt-3 space-y-1 text-sm">
-            <div className="flex justify-between font-bold text-gray-800 pt-1">
-              <span>Total</span>
-              <span className="text-green-700">₹{order.total}</span>
+
+          <div className="mt-4 border-t pt-3 space-y-1.5 text-sm">
+            {/* Original total (crossed) if changed */}
+            {rejInfo?.original_total && rejInfo.original_total !== order.total && (
+              <div className="flex justify-between text-gray-400 text-xs">
+                <span>Original Total</span>
+                <span className="line-through">₹{rejInfo.original_total}</span>
+              </div>
+            )}
+            {rejInfo?.rejected_amount > 0 && (
+              <div className="flex justify-between text-red-500 text-xs">
+                <span>Deducted (unavailable items)</span>
+                <span>− ₹{rejInfo.rejected_amount}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-gray-800 pt-1 border-t">
+              <span>Amount to Pay</span>
+              <span className="text-green-700 text-base">₹{order.total}</span>
             </div>
             <div className="flex justify-between text-gray-400 text-xs">
               <span>Payment</span>
