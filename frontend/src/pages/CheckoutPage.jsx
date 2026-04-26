@@ -6,7 +6,7 @@ import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD } from '../utils/constants'
-import { generateOrderId, openWhatsApp } from '../utils/whatsapp'
+import { generateOrderId } from '../utils/whatsapp'
 
 const STEPS = [
   { id: 1, label: 'Delivery'  },
@@ -181,18 +181,7 @@ export default function CheckoutPage() {
     clearCart()
     setPlacing(false)
 
-    // Notify admin via WhatsApp
-    openWhatsApp({
-      customer,
-      items: cart.map((item) => ({
-        name: item.name, price: item.price, quantity: item.quantity, unit: item.unit,
-      })),
-      total: finalTotal,
-      paymentMethod,
-      orderId,
-    })
-
-    addToast('Order placed! Admin notified via WhatsApp 🎉', 'success', 5000)
+    addToast('Order placed successfully! 🎉', 'success', 5000)
     navigate(`/track/${orderId}`)
   }
 
