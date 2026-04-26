@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/((?!images|favicon|find-orders\\.html).*)", "destination": "/index.html" }
+    { "source": "/((?!images|favicon).*)", "destination": "/index.html" }
   ]
 }

@@ -437,12 +437,11 @@ export default function OrdersPage() {
                                 {addr.slot && <p><span className="text-gray-400 text-xs">Slot</span><br/>{addr.slot}</p>}
                                 <p><span className="text-gray-400 text-xs">Payment</span><br/>{o.payment_method === 'cod' ? 'Cash on Delivery' : (o.payment_method || '').toUpperCase()}</p>
                               </div>
-                              {/* WhatsApp quick contact */}
+                              {/* Call quick contact */}
                               {(addr.phone || o.customer_phone) && (
-                                <a href={`https://wa.me/91${(addr.phone || o.customer_phone).replace(/\D/g,'').slice(-10)}`}
-                                  target="_blank" rel="noopener noreferrer"
-                                  className="mt-2 flex items-center justify-center gap-1.5 w-full py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-xl transition-colors">
-                                  💬 WhatsApp Customer
+                                <a href={`tel:+91${(addr.phone || o.customer_phone).replace(/\D/g,'').slice(-10)}`}
+                                  className="mt-2 flex items-center justify-center gap-1.5 w-full py-2 bg-[#1B4332] hover:bg-[#15362a] text-white text-xs font-semibold rounded-xl transition-colors">
+                                  📞 Call Customer
                                 </a>
                               )}
                             </div>

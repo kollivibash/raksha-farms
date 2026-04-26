@@ -24,7 +24,6 @@ import HomePage             from './pages/HomePage'
 import CartPage             from './pages/CartPage'
 import CheckoutPage         from './pages/CheckoutPage'
 import OrderConfirmationPage from './pages/OrderConfirmationPage'
-import AdminPage            from './pages/AdminPage'
 import LoginPage            from './pages/LoginPage'
 import MyOrdersPage         from './pages/MyOrdersPage'
 import ProductPage          from './pages/ProductPage'
@@ -70,7 +69,6 @@ export default function App() {
                         <Route path="/track/:orderId" element={<OrderTrackingPage />} />
                         <Route path="/my-orders"      element={<RequireAuth><MyOrdersPage /></RequireAuth>} />
                         <Route path="/profile"        element={<RequireAuth><ProfilePage /></RequireAuth>} />
-                        <Route path="/admin"          element={<AdminPage />} />
                         <Route path="/find-orders"    element={<FindOrdersPage />} />
                         <Route path="*"               element={<NotFoundPage />} />
                       </Routes>
