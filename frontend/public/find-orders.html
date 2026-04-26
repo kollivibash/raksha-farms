@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find My Orders – Raksha Farms</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, sans-serif; background: #f0fdf4; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .card { background: white; border-radius: 20px; padding: 32px 24px; width: 100%; max-width: 420px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  .logo { font-size: 28px; font-weight: 900; color: #16a34a; margin-bottom: 4px; }
+  .sub { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
+  h2 { font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+  p { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
+  input { width: 100%; border: 2px solid #d1fae5; border-radius: 14px; padding: 14px 16px; font-size: 16px; font-weight: 600; outline: none; transition: border 0.2s; }
+  input:focus { border-color: #16a34a; }
+  button { width: 100%; background: #16a34a; color: white; border: none; border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 12px; transition: background 0.2s; }
+  button:hover { background: #15803d; }
+  button:disabled { background: #86efac; cursor: not-allowed; }
+  #result { margin-top: 20px; }
+  .order { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .order-id { font-size: 12px; color: #6b7280; font-family: monospace; }
+  .order-total { font-size: 22px; font-weight: 900; color: #16a34a; }
+  .order-status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: #fef9c3; color: #854d0e; margin: 4px 0; }
+  .order-date { font-size: 12px; color: #9ca3af; }
+  .empty { text-align: center; padding: 20px; color: #9ca3af; }
+  .err { background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px; padding: 12px; color: #dc2626; font-size: 14px; margin-top: 12px; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  a.back { display: block; text-align: center; margin-top: 20px; color: #16a34a; text-decoration: none; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🌿 Raksha Farms</div>
+  <div class="sub">Farm to Doorstep</div>
+  <h2>Find Your Orders</h2>
+  <p>Enter the mobile number you used when placing your order</p>
+  <input type="tel" id="phone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" />
+  <button id="btn" onclick="findOrders()">🔍 Find My Orders</button>
+  <div id="result"></div>
+  <a class="back" href="/">← Back to shop</a>
+</div>
+
+<script>
+const API = 'https://raksha-farms.onrender.com';
+
+const STATUS = {
+  placed: '⏳ Pending', accepted: '✅ Accepted', preparing: '🍳 Preparing',
+  out_for_delivery: '🚚 Out for Delivery', delivered: '🎉 Delivered',
+  cancelled: '❌ Cancelled', rejected: '❌ Rejected',
+  pending: '⏳ Pending'
+};
+
+async function findOrders() {
+  const phone = document.getElementById('phone').value.replace(/\D/g,'');
+  if (phone.length < 10) { alert('Please enter a valid 10-digit mobile number'); return; }
+
+  const btn = document.getElementById('btn');
+  const result = document.getElementById('result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Searching...';
+  result.innerHTML = '';
+
+  try {
+    const res = await fetch(`${API}/api/orders/by-phone/${phone}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    if (!data.length) {
+      result.innerHTML = '<div class="empty">📦<br><br>No orders found for this number.<br><small>Try the number you gave at checkout.</small></div>';
+    } else {
+      let html = `<p style="color:#16a34a;font-weight:700;margin-bottom:12px">✅ Found ${data.length} order(s)</p>`;
+      data.forEach(o => {
+        const d = new Date(o.created_at).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'});
+        const items = (() => { try { const arr = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items||[]); return arr.map(i=>i.name).join(', ') || '—'; } catch { return '—'; } })();
+        html += `<div class="order">
+          <div class="order-id">Order #${o.reference_id || o.id}</div>
+          <div class="order-total">₹${o.total}</div>
+          <div class="order-status">${STATUS[o.status] || o.status}</div>
+          <div style="font-size:13px;color:#374151;margin:4px 0">${items}</div>
+          <div class="order-date">${d}</div>
+        </div>`;
+      });
+      result.innerHTML = html;
+    }
+  } catch(e) {
+    result.innerHTML = `<div class="err">❌ ${e.message}<br><small>Check your internet and try again.</small></div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Find My Orders';
+}
+
+document.getElementById('phone').addEventListener('keydown', e => { if (e.key === 'Enter') findOrders(); });
+</script>
+</body>
+</html>
