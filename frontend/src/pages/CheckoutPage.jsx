@@ -6,7 +6,6 @@ import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD } from '../utils/constants'
-import { SERVICEABLE_PINCODES } from '../data/products2'
 import { generateOrderId, openWhatsApp } from '../utils/whatsapp'
 
 const STEPS = [
@@ -45,7 +44,6 @@ export default function CheckoutPage() {
     }
   })
   const [errors, setErrors] = useState({})
-  const [pincodeStatus, setPincodeStatus] = useState(null) // 'valid' | 'invalid' | null
 
   // Step 2: delivery slot
   const [selectedSlot, setSelectedSlot] = useState('morning')
@@ -55,15 +53,6 @@ export default function CheckoutPage() {
 
   useEffect(() => { closeDrawer() }, [])
 
-  // Pincode validation
-  useEffect(() => {
-    const p = form.pincode.trim()
-    if (p.length === 6) {
-      setPincodeStatus(SERVICEABLE_PINCODES.has(p) ? 'valid' : 'invalid')
-    } else {
-      setPincodeStatus(null)
-    }
-  }, [form.pincode])
 
   const activeSlot    = DELIVERY_SLOTS.find((s) => s.id === selectedSlot)
   const slotFee       = totalPrice >= FREE_DELIVERY_THRESHOLD ? 0 : (activeSlot?.fee ?? 30)
@@ -95,9 +84,6 @@ export default function CheckoutPage() {
     if (!form.address.trim())                       errs.address = 'Delivery address is required'
     if (!form.city.trim())                          errs.city    = 'City is required'
     if (!/^\d{6}$/.test(form.pincode.trim()))       errs.pincode = 'Enter valid 6-digit pincode'
-    if (form.pincode.length === 6 && !SERVICEABLE_PINCODES.has(form.pincode)) {
-      errs.pincode = 'Sorry, we don\'t deliver to this pincode yet'
-    }
     return errs
   }
 
@@ -272,29 +258,8 @@ export default function CheckoutPage() {
                         placeholder="6-digit pincode"
                         value={form.pincode}
                         onChange={(e) => setField('pincode', e.target.value.replace(/\D/g, ''))}
-                        className={`input-field pr-10 ${errors.pincode ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : pincodeStatus === 'valid' ? 'border-forest-400 focus:border-forest-500' : ''}`}
+                        className={`input-field ${errors.pincode ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : ''}`}
                       />
-                      {pincodeStatus === 'valid' && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-forest-500 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                      )}
-                      {pincodeStatus === 'invalid' && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-red-400 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    {pincodeStatus === 'valid' && (
-                      <p className="text-forest-600 text-xs mt-1 font-medium">Delivery available in your area!</p>
-                    )}
-                    {pincodeStatus === 'invalid' && (
-                      <p className="text-red-500 text-xs mt-1">Service not available in your location yet</p>
-                    )}
                     {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
                   </div>
                 </div>
