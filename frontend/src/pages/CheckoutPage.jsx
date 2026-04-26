@@ -5,8 +5,7 @@ import { useOrders } from '../context/OrdersContext'
 import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD } from '../utils/constants'
-import { generateOrderId } from '../utils/whatsapp'
+import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD, generateOrderId } from '../utils/constants'
 
 const STEPS = [
   { id: 1, label: 'Delivery'  },
