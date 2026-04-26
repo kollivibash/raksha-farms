@@ -173,34 +173,27 @@ export default function OrdersPage() {
     load({ page: 1, status: '', search: '', fromDate: '', toDate: '' })
   }
 
-  // Merge backend row into local orders — parses items/address from JSON if needed
-  function mergeUpdated(prev, id, updated) {
-    return prev.map(o => {
-      if (o.id !== id) return o
-      const items = Array.isArray(updated.items)
-        ? updated.items
-        : (() => { try { return JSON.parse(updated.items || '[]') } catch { return o.items || [] } })()
-      return { ...o, ...updated, items }
-    })
-  }
-
   async function changeStatus(id, newStatus) {
     try {
-      const { data: updated } = await ordersAPI.updateStatus(id, newStatus)
-      setOrders(prev => mergeUpdated(prev, id, updated))
+      await ordersAPI.updateStatus(id, newStatus)
+      // Optimistic local update, then reload for accuracy
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+      load()
     } catch(e) { alert(e.response?.data?.error || 'Failed') }
   }
 
   async function handleRejectConfirm(orderId, newStatus, remarks, rejectedItems) {
     try {
-      const { data: updated } = await ordersAPI.updateStatus(orderId, newStatus, {
+      await ordersAPI.updateStatus(orderId, newStatus, {
         rejection_notes: remarks,
         rejected_items: rejectedItems,
       })
-      // Use backend response directly — has correct total, enriched notes, and all fields
-      setOrders(prev => mergeUpdated(prev, orderId, updated))
       setRejectOrder(null)
-    } catch(e) { alert(e.response?.data?.error || 'Failed to reject order') }
+      // Reload orders from backend — guarantees correct total, notes, status
+      await load()
+    } catch(e) {
+      alert(e.response?.data?.error || e.message || 'Failed to reject order')
+    }
   }
 
   // ── CSV Download ──
@@ -385,8 +378,9 @@ export default function OrdersPage() {
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
                           <select value={o.status} onChange={e => changeStatus(o.id, e.target.value)}
-                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1B4332] bg-white">
-                            {STATUSES.filter(s => s !== 'rejected').map(s =>
+                            disabled={o.status === 'rejected' || o.status === 'cancelled'}
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1B4332] bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                            {STATUSES.map(s =>
                               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                             )}
                           </select>
