@@ -49,7 +49,7 @@ export const productsAPI = {
 export const ordersAPI = {
   getAll: (params) => api.get('/orders', { params }),
   getOne: (id) => api.get(`/orders/${id}`),
-  updateStatus: (id, status) => api.patch(`/orders/${id}/status`, { status }),
+  updateStatus: (id, status, extras = {}) => api.patch(`/orders/${id}/status`, { status, ...extras }),
   getStats: () => api.get('/orders/stats'),
 }
 

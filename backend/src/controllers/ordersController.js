@@ -47,17 +47,23 @@ export async function createOrder(req, res) {
 
 export async function getOrders(req, res) {
   try {
-    const { status, page = 1, limit = 20, search } = req.query
+    const { status, page = 1, limit = 20, search, from_date, to_date } = req.query
     const offset = (page - 1) * limit
     let sql = `SELECT o.*, u.name as customer_name, u.phone as customer_phone
                FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE 1=1`
     const params = []
     if (status) { params.push(status); sql += ` AND o.status=$${params.length}` }
-    if (search) { params.push(`%${search}%`); sql += ` AND (u.name ILIKE $${params.length} OR u.phone ILIKE $${params.length})` }
+    if (search) {
+      params.push(`%${search}%`)
+      sql += ` AND (u.name ILIKE $${params.length} OR u.phone ILIKE $${params.length} OR o.reference_id ILIKE $${params.length} OR o.address->>'phone' ILIKE $${params.length} OR o.address->>'name' ILIKE $${params.length})`
+    }
+    if (from_date) { params.push(from_date); sql += ` AND o.created_at >= $${params.length}::date` }
+    if (to_date)   { params.push(to_date);   sql += ` AND o.created_at <  ($${params.length}::date + interval '1 day')` }
+    const countSql = sql.replace('SELECT o.*, u.name as customer_name, u.phone as customer_phone', 'SELECT COUNT(*)')
     sql += ` ORDER BY o.created_at DESC LIMIT $${params.length+1} OFFSET $${params.length+2}`
     params.push(limit, offset)
     const { rows } = await query(sql, params)
-    const cnt = await query(`SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.user_id=u.id WHERE 1=1${status?` AND o.status='${status}'`:''}`)
+    const cnt = await query(countSql, params.slice(0, params.length - 2))
     res.json({ orders: rows, total: parseInt(cnt.rows[0].count), page: parseInt(page) })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -76,14 +82,47 @@ export async function getOrder(req, res) {
 
 export async function updateOrderStatus(req, res) {
   try {
-    const { status } = req.body
+    const { status, rejection_notes, rejected_items, delivery_time } = req.body
     if (!VALID_STATUSES.includes(status))
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` })
+
+    // Fetch current order to get items for stock restore
+    const { rows: existing } = await query('SELECT * FROM orders WHERE id=$1', [req.params.id])
+    if (!existing[0]) return res.status(404).json({ error: 'Order not found' })
+
+    // Build rejection metadata to store in notes column
+    let notesPayload = rejection_notes || existing[0].notes || ''
+    if (rejected_items?.length) {
+      notesPayload = JSON.stringify({ remarks: rejection_notes || '', rejected_items })
+    }
+
+    const updateFields = ['status=$1', 'updated_at=NOW()']
+    const updateParams = [status]
+    if (notesPayload !== existing[0].notes) {
+      updateFields.push(`notes=$${updateParams.length + 1}`)
+      updateParams.push(notesPayload)
+    }
+    if (delivery_time) {
+      updateFields.push(`delivery_time=$${updateParams.length + 1}`)
+      updateParams.push(delivery_time)
+    }
+    updateParams.push(req.params.id)
+
     const { rows } = await query(
-      'UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-      [status, req.params.id]
+      `UPDATE orders SET ${updateFields.join(', ')} WHERE id=$${updateParams.length} RETURNING *`,
+      updateParams
     )
-    if (!rows[0]) return res.status(404).json({ error: 'Order not found' })
+
+    // Restore stock for rejected items
+    if ((status === 'rejected' || status === 'cancelled') && rejected_items?.length) {
+      for (const item of rejected_items) {
+        await query(
+          `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
+          [item.quantity || 1, item.id]
+        ).catch(() => {}) // non-fatal
+      }
+    }
+
     res.json(rows[0])
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
