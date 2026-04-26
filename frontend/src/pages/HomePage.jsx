@@ -109,26 +109,6 @@ export default function HomePage() {
             <h2 className="section-title">Shop by Category</h2>
           </div>
 
-          {/* Category pills — mobile horizontal scroll */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide md:hidden mb-4">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => selectCategory(cat.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all border ${
-                  activeCategory === cat.id
-                    ? 'bg-forest-500 text-white border-forest-500 shadow-forest'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-forest-300'
-                }`}
-              >
-                {cat.label}
-                <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                  activeCategory === cat.id ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
-                }`}>{categoryCounts[cat.id] || 0}</span>
-              </button>
-            ))}
-          </div>
-
           {/* Category cards — desktop grid */}
           <div className="hidden md:grid grid-cols-5 gap-3 mb-6">
             {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
