@@ -186,6 +186,14 @@ export async function initDb() {
       console.log('✅ Default categories seeded')
     }
 
+    // Migrate subscriptions table — old schema had product_id, new schema uses plan_id + items
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan_id UUID REFERENCES subscription_plans(id) ON DELETE SET NULL`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS price_per_cycle DECIMAL(10,2) NOT NULL DEFAULT 0`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`).catch(() => {})
+    // Widen frequency column to support 'bi-weekly' etc
+    await query(`ALTER TABLE subscriptions ALTER COLUMN frequency TYPE VARCHAR(30)`).catch(() => {})
+
     // Add reference_id column if it doesn't exist (stores the frontend RF-... order ID)
     await query(`
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)
