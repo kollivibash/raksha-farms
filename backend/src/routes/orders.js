@@ -1,12 +1,19 @@
 import { Router } from 'express'
+import jwt from 'jsonwebtoken'
 import { getOrders, getOrder, createOrder, updateOrderStatus, getOrderStats, trackOrder, trackOrderByRef, getOrdersByPhone, getMyOrders } from '../controllers/ordersController.js'
 import { adminSecret, verifyToken } from '../middleware/auth.js'
 
-// Optional auth middleware — attaches user if token present, otherwise continues
+// Optional auth middleware — attaches user if token valid, silently ignores bad/expired tokens
 function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization
   if (authHeader?.startsWith('Bearer ')) {
-    return verifyToken(req, res, next)
+    const token = authHeader.split(' ')[1]
+    try {
+      req.user = jwt.verify(token, process.env.JWT_SECRET)
+    } catch {
+      // Invalid/expired token — treat as guest, don't block the request
+      req.user = null
+    }
   }
   next()
 }
