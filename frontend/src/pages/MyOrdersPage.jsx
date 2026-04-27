@@ -341,6 +341,24 @@ function OrderCard({ order }) {
     return rejInfo?.rejected_items?.some(r => r.id === item.id || r.name === item.name)
   }
 
+  // For partial rejections: compute correct totals from item prices
+  // (avoids ₹0 bug when backend stored wrong total or parse failed)
+  const deliveryFee = Number(order.deliveryFee || 0)
+  const allItemsSubtotal = (order.items || []).reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0)
+  const keptItemsSubtotal = (order.items || [])
+    .filter(item => !isItemRejected(item))
+    .reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0)
+
+  // displayTotal: for partial rejection use kept-items calc; fall back to stored total
+  const displayTotal = hasPartialRejection && keptItemsSubtotal > 0
+    ? keptItemsSubtotal + deliveryFee
+    : order.total
+
+  // originalTotal: for partial rejection use all-items calc; fall back to rejInfo or stored total
+  const displayOriginalTotal = hasPartialRejection && allItemsSubtotal > 0
+    ? allItemsSubtotal + deliveryFee
+    : (rejInfo?.original_total || order.total)
+
   return (
     <div className={`card overflow-hidden border-l-4 ${hasPartialRejection ? 'border-orange-300' : s.border}`}>
       <button className="w-full text-left p-5" onClick={() => setExpanded((v) => !v)}>
@@ -359,11 +377,11 @@ function OrderCard({ order }) {
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-right">
-              {/* Show original price crossed if total changed */}
-              {rejInfo?.original_total && rejInfo.original_total !== order.total && (
-                <p className="text-gray-400 text-xs line-through">₹{rejInfo.original_total}</p>
+              {/* Show original total crossed out when partial rejection reduced it */}
+              {hasPartialRejection && displayOriginalTotal !== displayTotal && (
+                <p className="text-gray-400 text-xs line-through">₹{displayOriginalTotal}</p>
               )}
-              <p className="font-black text-green-700 text-lg">₹{order.total}</p>
+              <p className="font-black text-green-700 text-lg">₹{displayTotal}</p>
               <p className="text-gray-400 text-xs">{order.items?.length || 0} item(s)</p>
             </div>
             <span className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${hasPartialRejection ? 'bg-orange-50 text-orange-700' : `${s.bg} ${s.text}`}`}>
@@ -444,22 +462,34 @@ function OrderCard({ order }) {
           )}
 
           <div className="mt-4 border-t pt-3 space-y-1.5 text-sm">
-            {/* Original total (crossed) if changed */}
-            {rejInfo?.original_total && rejInfo.original_total !== order.total && (
+            {/* Original total crossed out for partial rejections */}
+            {hasPartialRejection && displayOriginalTotal !== displayTotal && (
               <div className="flex justify-between text-gray-400 text-xs">
                 <span>Original Total</span>
-                <span className="line-through">₹{rejInfo.original_total}</span>
+                <span className="line-through">₹{displayOriginalTotal}</span>
               </div>
             )}
-            {rejInfo?.rejected_amount > 0 && (
-              <div className="flex justify-between text-red-500 text-xs">
-                <span>Deducted (unavailable items)</span>
-                <span>− ₹{rejInfo.rejected_amount}</span>
+            {/* Deducted amount — compute from items if rejInfo.rejected_amount is 0/missing */}
+            {hasPartialRejection && (() => {
+              const deducted = rejInfo?.rejected_amount > 0
+                ? rejInfo.rejected_amount
+                : (displayOriginalTotal - displayTotal)
+              return deducted > 0 ? (
+                <div className="flex justify-between text-red-500 text-xs">
+                  <span>Deducted (unavailable items)</span>
+                  <span>− ₹{deducted}</span>
+                </div>
+              ) : null
+            })()}
+            {deliveryFee > 0 && (
+              <div className="flex justify-between text-gray-400 text-xs">
+                <span>Delivery fee</span>
+                <span>₹{deliveryFee}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-gray-800 pt-1 border-t">
               <span>Amount to Pay</span>
-              <span className="text-green-700 text-base">₹{order.total}</span>
+              <span className="text-green-700 text-base">₹{displayTotal}</span>
             </div>
             <div className="flex justify-between text-gray-400 text-xs">
               <span>Payment</span>

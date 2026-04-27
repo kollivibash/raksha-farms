@@ -211,12 +211,18 @@ export default function OrdersPage() {
 
       // Build rejection info locally — don't rely on backend response
       // because Render may be running old code that doesn't save notes/total
-      const original = orders.find(o => o.id === orderId)
-      const originalTotal   = Number(original?.total || 0)
-      const deliveryFee     = Number(original?.delivery_fee || 0)
-      const rejectedAmount  = rejectedItems.reduce((s, ri) => s + Number(ri.price || 0) * Number(ri.quantity || 1), 0)
-      const allRejected     = rejectedItems.length >= (original?.items?.length || 0)
-      const adjustedTotal   = allRejected ? 0 : Math.max(deliveryFee, originalTotal - rejectedAmount)
+      const original   = orders.find(o => o.id === orderId)
+      const allItems   = Array.isArray(original?.items) ? original.items : []
+      const deliveryFee = Number(original?.delivery_fee || 0)
+
+      // Compute originalTotal from items (more reliable than stored total field,
+      // which can be 0 if backend had a parse error or prior bad state)
+      const itemsSubtotal  = allItems.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0)
+      const originalTotal  = itemsSubtotal > 0 ? itemsSubtotal + deliveryFee : Number(original?.total || 0)
+
+      const rejectedAmount = rejectedItems.reduce((s, ri) => s + Number(ri.price || 0) * Number(ri.quantity || 1), 0)
+      const allRejected    = rejectedItems.length >= (allItems.length || original?.items?.length || 0)
+      const adjustedTotal  = allRejected ? 0 : Math.max(deliveryFee, originalTotal - rejectedAmount)
 
       const localNotes = JSON.stringify({
         remarks,
