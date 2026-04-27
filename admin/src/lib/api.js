@@ -29,7 +29,7 @@ api.interceptors.response.use(
 
 // ── Auth ──────────────────────────────────────────────
 export const authAPI = {
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (email, password) => api.post('/auth/admin-login', { email, password }), // admin-only endpoint
   me: () => api.get('/auth/me'),
   changePassword: (data) => api.put('/auth/change-password', data),
 }

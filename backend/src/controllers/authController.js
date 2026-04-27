@@ -41,7 +41,6 @@ export async function login(req, res) {
     if (email) {
       ({ rows } = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]))
     } else {
-      // phone login — strip non-digit chars and match last 10 digits
       const digits = phone.replace(/\D/g, '').slice(-10)
       ;({ rows } = await query("SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone,'\\D','','g'),10) = $1", [digits]))
     }
@@ -54,10 +53,30 @@ export async function login(req, res) {
     if (user.role !== 'admin' && user.role !== 'user') return res.status(403).json({ error: 'Access denied' })
 
     const token = signToken(user)
-    res.json({
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
-    })
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// ── Admin-only login — rejects non-admin roles at the server level ─────────────
+export async function adminLogin(req, res) {
+  try {
+    const { email, password } = req.body
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+
+    const { rows } = await query('SELECT * FROM users WHERE email=$1', [email.toLowerCase()])
+    const user = rows[0]
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+
+    // Hard reject at server — no token is ever issued to a non-admin here
+    if (user.role !== 'admin') return res.status(403).json({ error: 'Access denied: admin accounts only' })
+
+    const token = signToken(user)
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

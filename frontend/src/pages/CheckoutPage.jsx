@@ -175,6 +175,14 @@ export default function CheckoutPage() {
       if (backendRes.ok) {
         const data = await backendRes.json()
         backendId = data.id || null
+        // Override local order with server-confirmed values so tracking shows accurate totals
+        order.total       = Number(data.total)       || order.total
+        order.subtotal    = Number(data.subtotal)     || order.subtotal
+        order.deliveryFee = Number(data.delivery_fee) || order.deliveryFee
+        // Use server-validated items (prices may have been corrected server-side)
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          order.items = data.items
+        }
       } else {
         const errData = await backendRes.json().catch(() => ({}))
         setPlacing(false)
@@ -197,6 +205,7 @@ export default function CheckoutPage() {
     }))
 
     addOrder({ ...order, backendId })
+    // Stock already deducted server-side in transaction; sync local context so UI reflects it
     cart.forEach((item) => decreaseStock(item.id, item.quantity))
     clearCart()
     setPlacing(false)
