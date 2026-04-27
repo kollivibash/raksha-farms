@@ -204,27 +204,38 @@ export default function OrdersPage() {
 
   async function handleRejectConfirm(orderId, newStatus, remarks, rejectedItems) {
     try {
-      const { data: updated } = await ordersAPI.updateStatus(orderId, newStatus, {
+      await ordersAPI.updateStatus(orderId, newStatus, {
         rejection_notes: remarks,
         rejected_items:  rejectedItems,
       })
-      // Immediately patch the row in the table using the server's own response.
-      // Do NOT call forceReload() here — that would re-fetch and overwrite this
-      // with whatever the server has cached, losing the update we just applied.
+
+      // Build rejection info locally — don't rely on backend response
+      // because Render may be running old code that doesn't save notes/total
+      const original = orders.find(o => o.id === orderId)
+      const originalTotal   = Number(original?.total || 0)
+      const deliveryFee     = Number(original?.delivery_fee || 0)
+      const rejectedAmount  = rejectedItems.reduce((s, ri) => s + Number(ri.price || 0) * Number(ri.quantity || 1), 0)
+      const allRejected     = rejectedItems.length >= (original?.items?.length || 0)
+      const adjustedTotal   = allRejected ? 0 : Math.max(deliveryFee, originalTotal - rejectedAmount)
+
+      const localNotes = JSON.stringify({
+        remarks,
+        rejected_items:  rejectedItems,
+        original_total:  originalTotal,
+        rejected_amount: rejectedAmount,
+        adjusted_total:  adjustedTotal,
+      })
+
       setOrders(prev => prev.map(o => {
         if (o.id !== orderId) return o
-        const updItems = Array.isArray(updated.items)
-          ? updated.items
-          : (() => { try { return JSON.parse(updated.items || '[]') } catch { return o.items } })()
         return {
           ...o,
-          status:     updated.status,
-          total:      updated.total,
-          notes:      updated.notes,
-          updated_at: updated.updated_at,
-          items:      updItems,
+          status: newStatus,
+          total:  adjustedTotal,
+          notes:  localNotes,
         }
       }))
+
       setRejectOrder(null)
       showToast(newStatus === 'rejected' ? '❌ Order rejected' : '⚠️ Partial rejection saved')
     } catch(e) {
@@ -378,8 +389,13 @@ export default function OrdersPage() {
                 const isOpen = expanded === o.id
                 const addr = typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {})
                 const rejectionInfo = (() => {
-                  try { return o.notes ? JSON.parse(o.notes) : null } catch { return null }
+                  try {
+                    if (!o.notes) return null
+                    const p = typeof o.notes === 'string' ? JSON.parse(o.notes) : o.notes
+                    return p?.rejected_items?.length ? p : null
+                  } catch { return null }
                 })()
+                const isPartialRejection = rejectionInfo && o.status === 'accepted'
 
                 return (
                   <React.Fragment key={o.id}>
@@ -412,7 +428,12 @@ export default function OrdersPage() {
                         </p>
                       </td>
                       {/* Total */}
-                      <td className="px-4 py-3 text-right font-bold text-gray-800">₹{Number(o.total).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">
+                        {isPartialRejection && rejectionInfo.original_total > Number(o.total) && (
+                          <p className="text-xs text-gray-400 line-through">₹{Number(rejectionInfo.original_total).toLocaleString()}</p>
+                        )}
+                        <p className="font-bold text-gray-800">₹{Number(o.total).toLocaleString()}</p>
+                      </td>
                       {/* Payment */}
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${o.payment_method === 'upi' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -420,7 +441,15 @@ export default function OrdersPage() {
                         </span>
                       </td>
                       {/* Status */}
-                      <td className="px-4 py-3"><StatusBadge status={o.status}/></td>
+                      <td className="px-4 py-3">
+                        {isPartialRejection ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                            ⚠️ Partial
+                          </span>
+                        ) : (
+                          <StatusBadge status={o.status}/>
+                        )}
+                      </td>
                       {/* Actions */}
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
