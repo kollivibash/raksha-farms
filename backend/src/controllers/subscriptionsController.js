@@ -8,9 +8,16 @@ const BASE_SELECT = `
     s.payment_status, s.address AS sub_address, s.notes AS sub_notes,
     u.id    AS user_id,
     u.name  AS customer_name,
-    u.phone AS customer_phone,
     u.email AS customer_email,
     u.address AS customer_address,
+    -- Phone: users table first, then subscription address, then most recent order address
+    COALESCE(
+      NULLIF(u.phone, ''),
+      NULLIF(s.address->>'phone', ''),
+      (SELECT NULLIF(o.address->>'phone', '')
+       FROM orders o WHERE o.user_id = s.user_id
+       ORDER BY o.created_at DESC LIMIT 1)
+    ) AS customer_phone,
     sp.id            AS plan_id,
     sp.name          AS plan_name,
     sp.frequency_days,
@@ -97,9 +104,15 @@ export async function getCalendar(req, res) {
         s.frequency, s.is_active, s.delivery_count, s.skipped_count,
         s.payment_status,
         u.name  AS customer_name,
-        u.phone AS customer_phone,
         u.email AS customer_email,
         u.address AS customer_address,
+        COALESCE(
+          NULLIF(u.phone, ''),
+          NULLIF(s.address->>'phone', ''),
+          (SELECT NULLIF(o.address->>'phone', '')
+           FROM orders o WHERE o.user_id = s.user_id
+           ORDER BY o.created_at DESC LIMIT 1)
+        ) AS customer_phone,
         sp.name AS plan_name, sp.frequency_days
       FROM subscriptions s
       LEFT JOIN users u               ON s.user_id = u.id
@@ -131,7 +144,16 @@ export async function generateOrders(req, res) {
 
     const { rows: dueSubs } = await client.query(`
       SELECT s.*,
-        u.name AS uname, u.phone AS uphone, u.email AS uemail, u.address AS uaddress,
+        u.name  AS uname,
+        u.email AS uemail,
+        u.address AS uaddress,
+        COALESCE(
+          NULLIF(u.phone, ''),
+          NULLIF(s.address->>'phone', ''),
+          (SELECT NULLIF(o.address->>'phone', '')
+           FROM orders o WHERE o.user_id = s.user_id
+           ORDER BY o.created_at DESC LIMIT 1)
+        ) AS uphone,
         sp.frequency_days
       FROM subscriptions s
       LEFT JOIN users u               ON s.user_id = u.id
