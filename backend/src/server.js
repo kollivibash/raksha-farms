@@ -71,8 +71,8 @@ app.use('/api/categories',         categoriesRoutes)
 app.get('/health', (req, res) => res.json({
   status:    'ok',
   env:       process.env.NODE_ENV,
-  version:   '2026-04-27-v14',   // bump this on every deploy to verify new code is live
-  features:  ['orders', 'order-tracking', 'google-auth', 'cross-device-sync', 'partial-rejection', 'low-stock-alerts', 'subscriptions'],
+  version:   '2026-04-27-v15',   // bump this on every deploy to verify new code is live
+  features:  ['orders', 'order-tracking', 'google-auth', 'cross-device-sync', 'partial-rejection', 'low-stock-alerts', 'subscriptions', 'stock-deduction', 'soft-delete', 'admin-product-filters'],
   database:  process.env.DATABASE_URL ? 'configured' : 'not-configured',
 }))
 

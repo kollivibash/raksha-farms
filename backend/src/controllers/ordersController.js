@@ -1,13 +1,57 @@
 import { query } from '../config/database.js'
+import pool from '../config/database.js'
 
 const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 
 export async function createOrder(req, res) {
+  const client = await pool.connect()
   try {
     const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId, subscription_plan_id } = req.body
     if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
 
-    // Build address JSONB from customer object
+    await client.query('BEGIN')
+
+    // ── Server-side price + stock validation ──────────────────────────────────
+    const ids = items.map(i => i.id).filter(Boolean)
+    let serverTotal = deliveryFee || 0
+    const validatedItems = []
+
+    for (const item of items) {
+      if (!item.id) continue
+      const { rows: pRows } = await client.query(
+        'SELECT id, name, price, offer_price, stock, unit, is_active FROM products WHERE id=$1',
+        [item.id]
+      )
+      const prod = pRows[0]
+      if (!prod || !prod.is_active) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Product "${item.name || item.id}" is no longer available` })
+      }
+      if (prod.stock < item.quantity) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Insufficient stock for "${prod.name}". Available: ${prod.stock}` })
+      }
+      // Use server price (offer_price takes precedence)
+      const serverPrice = prod.offer_price && Number(prod.offer_price) > 0
+        ? Number(prod.offer_price)
+        : Number(prod.price)
+      serverTotal += serverPrice * item.quantity
+      validatedItems.push({ ...item, price: serverPrice, unit: prod.unit })
+    }
+
+    // Deduct stock atomically for each item
+    for (const item of validatedItems) {
+      await client.query(
+        'UPDATE products SET stock = stock - $1, updated_at=NOW() WHERE id=$2',
+        [item.quantity, item.id]
+      )
+      await client.query(
+        `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'order_placed')`,
+        [item.id, -item.quantity]
+      ).catch(() => {})
+    }
+
+    // ── Build order ───────────────────────────────────────────────────────────
     const emailForAddress = req.user?.email || customer?.email || ''
     const address = {
       name:    customer?.name    || '',
@@ -18,22 +62,21 @@ export async function createOrder(req, res) {
       email:   emailForAddress,
     }
 
-    // If not authenticated but email known, try linking to user
     let userId = req.user?.id || null
     if (!userId && customer?.email) {
-      const { rows: u } = await query('SELECT id FROM users WHERE email=$1', [customer.email.toLowerCase()]).catch(() => ({ rows: [] }))
+      const { rows: u } = await client.query('SELECT id FROM users WHERE email=$1', [customer.email.toLowerCase()]).catch(() => ({ rows: [] }))
       if (u[0]) userId = u[0].id
     }
 
-    const { rows } = await query(
+    const { rows } = await client.query(
       `INSERT INTO orders (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes, reference_id)
        VALUES ($1, $2, $3, $4, $5, 'placed', $6, $7, $8, $9) RETURNING *`,
       [
         userId,
-        JSON.stringify(items),
-        subtotal  || total,
+        JSON.stringify(validatedItems),
+        serverTotal - (deliveryFee || 0),
         deliveryFee || 0,
-        total,
+        serverTotal,
         paymentMethod || 'cod',
         JSON.stringify(address),
         customer?.notes || notes || '',
@@ -42,18 +85,18 @@ export async function createOrder(req, res) {
     )
     const order = rows[0]
 
-    // If a subscription plan was selected, create a subscription record
+    // ── Subscription creation ─────────────────────────────────────────────────
     if (subscription_plan_id && userId) {
       try {
-        const { rows: planRows } = await query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
+        const { rows: planRows } = await client.query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
         const plan = planRows[0]
         if (plan) {
           const nextDelivery = new Date()
           nextDelivery.setDate(nextDelivery.getDate() + (plan.frequency_days || 1))
-          await query(
+          await client.query(
             `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
              VALUES ($1, $2, $3, $4, $5, $6, true)`,
-            [userId, plan.id, JSON.stringify(items), total, plan.frequency, nextDelivery.toISOString().split('T')[0]]
+            [userId, plan.id, JSON.stringify(validatedItems), serverTotal, plan.frequency, nextDelivery.toISOString().split('T')[0]]
           )
         }
       } catch(subErr) {
@@ -61,8 +104,14 @@ export async function createOrder(req, res) {
       }
     }
 
+    await client.query('COMMIT')
     res.status(201).json(order)
-  } catch (err) { res.status(500).json({ error: err.message }) }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 }
 
 export async function getOrders(req, res) {
@@ -180,12 +229,31 @@ export async function updateOrderStatus(req, res) {
       updateParams
     )
 
-    // Restore stock for every rejected item (partial or full rejection)
+    // Restore stock for rejected items (they were deducted at order-placement time)
     if (rejected_items?.length) {
       for (const item of rejected_items) {
         await query(
           `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
           [item.quantity || 1, item.id]
+        ).catch(() => {})
+        await query(
+          `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'rejection_restore')`,
+          [item.id, item.quantity || 1]
+        ).catch(() => {})
+      }
+    }
+
+    // Restore ALL items if order fully cancelled (and wasn't already rejected)
+    if (status === 'cancelled' && ord.status !== 'rejected' && ord.status !== 'cancelled') {
+      for (const item of fullItems) {
+        if (!item.id) continue
+        await query(
+          `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
+          [item.quantity || 1, item.id]
+        ).catch(() => {})
+        await query(
+          `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'cancellation_restore')`,
+          [item.id, item.quantity || 1]
         ).catch(() => {})
       }
     }

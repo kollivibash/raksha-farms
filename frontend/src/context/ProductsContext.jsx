@@ -31,19 +31,17 @@ export function ProductsProvider({ children }) {
               ? (p.image_url.startsWith('http')
                   ? p.image_url
                   : p.image_url.startsWith('/images/')
-                    ? p.image_url            // served by Netlify static hosting
-                    : `${BACKEND_URL}${p.image_url}`)  // backend uploads
-              : `https://images.pexels.com/photos/1300972/pexels-photo-1300972.jpeg?auto=compress&cs=tinysrgb&w=500`,
+                    ? p.image_url
+                    : `${BACKEND_URL}${p.image_url}`)
+              : null,
             featured:    p.is_featured || false,
             organic:     true,
             rating:      4.7,
             reviews:     42,
             variants:    Array.isArray(p.variants) ? p.variants : [],
           }))
-          // Merge: API products first, then any static products not in DB
-          const apiIds = new Set(normalized.map(p => p.id))
-          const staticOnly = INITIAL_PRODUCTS.filter(p => !apiIds.has(p.id))
-          setProducts([...normalized, ...staticOnly])
+          // Use ONLY DB products — don't mix unmanageable static data in production
+          setProducts(normalized)
         }
       })
       .catch(() => {

@@ -17,6 +17,11 @@ export default function LoginPage() {
     setLoading(true); setError('')
     try {
       const { data } = await authAPI.login(form.email, form.password)
+      // Reject if not an admin role — never store a customer token in admin panel
+      if (data.user?.role !== 'admin') {
+        setError('Access denied: admin accounts only')
+        return
+      }
       Cookies.set('admin_token', data.token, { expires: 7 })
       localStorage.setItem('admin_token', data.token)
       router.replace('/')

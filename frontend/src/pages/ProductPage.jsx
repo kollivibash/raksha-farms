@@ -83,7 +83,7 @@ export default function ProductPage() {
       <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
         <Link to="/" className="hover:text-forest-500 transition-colors">Home</Link>
         <span>/</span>
-        <Link to={`/?cat=${product.category}`} className="hover:text-forest-500 transition-colors capitalize">{product.category}</Link>
+        <Link to={`/?category=${product.category}`} className="hover:text-forest-500 transition-colors capitalize">{product.category}</Link>
         <span>/</span>
         <span className="text-gray-600 font-medium truncate">{product.name}</span>
       </nav>

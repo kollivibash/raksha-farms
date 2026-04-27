@@ -92,7 +92,12 @@ export function CartProvider({ children }) {
   function updateQuantity(cartKey, quantity) {
     if (quantity <= 0) { removeFromCart(cartKey); return }
     setCart((prev) =>
-      prev.map((item) => item.cartKey === cartKey ? { ...item, quantity } : item)
+      prev.map((item) => {
+        if (item.cartKey !== cartKey) return item
+        // Cap to available stock (stock > 0 check guards products with no stock field)
+        const capped = (item.stock > 0) ? Math.min(quantity, item.stock) : quantity
+        return { ...item, quantity: capped }
+      })
     )
   }
 
