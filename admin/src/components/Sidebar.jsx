@@ -8,16 +8,17 @@ import {
 import Cookies from 'js-cookie'
 
 const nav = [
-  { label:'Dashboard',     href:'/',               icon: LayoutDashboard },
-  { label:'Orders',        href:'/orders',         icon: ShoppingCart },
-  { label:'Products',      href:'/products',       icon: Package },
-  { label:'Categories',    href:'/categories',     icon: Grid3X3 },
-  { label:'Inventory',     href:'/inventory',      icon: Warehouse },
-  { label:'Customers',     href:'/customers',      icon: Users },
-  { label:'Coupons',       href:'/coupons',        icon: Tag },
-  { label:'Subscriptions', href:'/subscriptions',  icon: RefreshCw },
-  { label:'Analytics',     href:'/analytics',      icon: BarChart2 },
-  { label:'Settings',      href:'/settings',       icon: Settings },
+  { label:'Dashboard',     href:'/',                      icon: LayoutDashboard },
+  { label:'Orders',        href:'/orders',                icon: ShoppingCart },
+  { label:'Products',      href:'/products',              icon: Package },
+  { label:'Categories',    href:'/categories',            icon: Grid3X3 },
+  { label:'Inventory',     href:'/inventory',             icon: Warehouse },
+  { label:'Customers',     href:'/customers',             icon: Users },
+  { label:'Coupons',       href:'/coupons',               icon: Tag },
+  { label:'Subscription Plans', href:'/subscription-plans', icon: RefreshCw },
+  { label:'Customer Subs', href:'/subscriptions',         icon: RefreshCw },
+  { label:'Analytics',     href:'/analytics',             icon: BarChart2 },
+  { label:'Settings',      href:'/settings',              icon: Settings },
 ]
 
 export default function Sidebar({ mobileOpen = true, onClose }) {
