@@ -261,6 +261,7 @@ export default function CheckoutPage() {
                 </svg>
               </button>
             </div>
+          </div>
           )}
 
           {/* ── STEP 2: Delivery Scheduling ── */}
