@@ -16,6 +16,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { WishlistProvider } from './context/WishlistContext'
 import { LocationProvider } from './context/LocationContext'
 import { AddressProvider }  from './context/AddressContext'
+import { SubscriptionProvider } from './context/SubscriptionContext'
 import Navbar               from './components/Navbar'
 import Footer               from './components/Footer'
 import BottomNav            from './components/BottomNav'
@@ -48,6 +49,7 @@ export default function App() {
     <ToastProvider>
       <LocationProvider>
       <ProductsProvider>
+        <SubscriptionProvider>
         <OrdersProvider>
           <WishlistProvider>
             <CartProvider>
@@ -84,6 +86,7 @@ export default function App() {
             </CartProvider>
           </WishlistProvider>
         </OrdersProvider>
+        </SubscriptionProvider>
       </ProductsProvider>
       </LocationProvider>
     </ToastProvider>

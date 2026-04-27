@@ -73,16 +73,36 @@ export async function initDb() {
       )
     `)
 
+    // Subscription plans — defined by admin (daily, weekly, monthly, custom, etc.)
+    await query(`
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name            VARCHAR(100) NOT NULL,
+        frequency       VARCHAR(30) NOT NULL,
+        frequency_days  INTEGER,
+        base_price      DECIMAL(10,2) NOT NULL,
+        margin_percent  DECIMAL(5,2) DEFAULT 0,
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        description     TEXT,
+        is_active       BOOLEAN DEFAULT true,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+
+    // Customer subscriptions — active subscriptions to plans
     await query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
-        product_id      UUID REFERENCES products(id) ON DELETE CASCADE,
-        quantity        INTEGER DEFAULT 1,
-        frequency       VARCHAR(20) DEFAULT 'daily' CHECK (frequency IN ('daily','weekly','monthly')),
+        plan_id         UUID REFERENCES subscription_plans(id) ON DELETE CASCADE,
+        items           JSONB NOT NULL DEFAULT '[]',
+        price_per_cycle DECIMAL(10,2) NOT NULL,
+        frequency       VARCHAR(30) NOT NULL,
         next_delivery   DATE,
         is_active       BOOLEAN DEFAULT true,
-        created_at      TIMESTAMPTZ DEFAULT NOW()
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `)
 
@@ -123,6 +143,25 @@ export async function initDb() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `)
+
+    // Seed default subscription plans if table is empty
+    const { rows: planCount } = await query('SELECT COUNT(*) FROM subscription_plans')
+    if (parseInt(planCount[0].count) === 0) {
+      const plans = [
+        ['Daily Fresh', 'daily', 1, 0, 0, 5, 'Get fresh produce every day'],
+        ['Weekly Bundle', 'weekly', 7, 0, 0, 10, 'Best savings - 10% off weekly orders'],
+        ['Bi-Weekly', 'bi-weekly', 14, 0, 0, 8, 'Every other week delivery'],
+        ['Monthly Fresh', 'monthly', 30, 0, 0, 15, 'Maximum savings on monthly plans'],
+      ]
+      for (const [name, freq, days, base, margin, discount, desc] of plans) {
+        await query(
+          `INSERT INTO subscription_plans (name, frequency, frequency_days, base_price, margin_percent, discount_percent, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+          [name, freq, days, base, margin, discount, desc]
+        )
+      }
+      console.log('✅ Default subscription plans seeded')
+    }
 
     // Seed default categories if table is empty
     const { rows: catCount } = await query('SELECT COUNT(*) FROM categories')

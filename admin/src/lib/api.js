@@ -75,10 +75,18 @@ export const couponsAPI = {
   delete: (id) => api.delete(`/coupons/${id}`),
 }
 
-// ── Subscriptions ─────────────────────────────────────
+// ── Subscriptions (Customer) ──────────────────────────
 export const subscriptionsAPI = {
   getAll: () => api.get('/subscriptions'),
   update: (id, data) => api.put(`/subscriptions/${id}`, data),
+}
+
+// ── Subscription Plans (Admin) ─────────────────────────
+export const subscriptionPlansAPI = {
+  getAll: () => api.get('/subscription-plans/admin/all'),
+  create: (data) => api.post('/subscription-plans', data),
+  update: (id, data) => api.put(`/subscription-plans/${id}`, data),
+  delete: (id) => api.delete(`/subscription-plans/${id}`),
 }
 
 // ── Categories ────────────────────────────────────────

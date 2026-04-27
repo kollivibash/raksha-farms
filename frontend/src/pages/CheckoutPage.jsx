@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD, generateOrderId } from '../utils/constants'
 import { useAddresses } from '../context/AddressContext'
+import { useSubscriptions } from '../context/SubscriptionContext'
 
 const STEPS = [
   { id: 1, label: 'Delivery'  },
@@ -22,8 +23,11 @@ export default function CheckoutPage() {
   const { addToast }    = useToast()
   const navigate        = useNavigate()
   const { addresses, LABEL_ICONS } = useAddresses()
+  const { plans: subscriptionPlans } = useSubscriptions()
 
   const [step, setStep]   = useState(1)
+  const [orderType, setOrderType] = useState('onetime') // 'onetime' or 'subscription'
+  const [selectedPlan, setSelectedPlan] = useState(null)
   const [placing, setPlacing] = useState(false)
 
   // Step 1 form — pre-fill from user profile or last saved address
@@ -237,6 +241,78 @@ export default function CheckoutPage() {
           {/* ── STEP 1: Delivery Info ── */}
           {step === 1 && (
             <div className="card p-6 animate-slide-up">
+              {/* Order Type Selection */}
+              {subscriptionPlans.length > 0 && (
+                <div className="mb-6 pb-6 border-b border-gray-100">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Order Type</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrderType('onetime')
+                        setSelectedPlan(null)
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                        orderType === 'onetime'
+                          ? 'border-forest-500 bg-forest-50'
+                          : 'border-gray-100 hover:border-gray-200 bg-white'
+                      }`}
+                    >
+                      <span className="text-2xl">🛒</span>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-gray-800">One-Time Order</p>
+                        <p className="text-xs text-gray-500">Deliver once</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('subscription')}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                        orderType === 'subscription'
+                          ? 'border-forest-500 bg-forest-50'
+                          : 'border-gray-100 hover:border-gray-200 bg-white'
+                      }`}
+                    >
+                      <span className="text-2xl">🔄</span>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-gray-800">Subscribe</p>
+                        <p className="text-xs text-gray-500 text-forest-600">Save 5-15%</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Subscription Plans Selection */}
+              {orderType === 'subscription' && subscriptionPlans.length > 0 && (
+                <div className="mb-6 pb-6 border-b border-gray-100">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Choose Plan</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {subscriptionPlans.map(plan => (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => setSelectedPlan(plan)}
+                        className={`p-4 rounded-xl border-2 transition-all text-left ${
+                          selectedPlan?.id === plan.id
+                            ? 'border-forest-500 bg-forest-50 shadow-sm'
+                            : 'border-gray-200 hover:border-forest-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="font-semibold text-gray-900 text-sm">{plan.name}</p>
+                          {plan.discount_percent > 0 && (
+                            <span className="badge bg-green-100 text-green-700 text-[10px] font-bold">Save {plan.discount_percent}%</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 capitalize mb-2">{plan.frequency}</p>
+                        {plan.description && <p className="text-xs text-gray-600">{plan.description}</p>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <h2 className="font-bold text-gray-800 text-lg mb-5 flex items-center gap-2">
                 <svg className="w-5 h-5 text-forest-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
