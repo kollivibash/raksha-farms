@@ -202,12 +202,13 @@ export async function generateOrders(req, res) {
         [sub.id, targetDate, orderId, sub.price_per_cycle]
       )
 
-      // Advance next_delivery + increment delivery_count
+      // Advance next_delivery + increment delivery_count + reset payment for new cycle
       const days = sub.frequency_days || 1
       await client.query(
         `UPDATE subscriptions
          SET delivery_count = delivery_count + 1,
              next_delivery  = $1::date + ($2 || ' days')::interval,
+             payment_status = 'cod_due',
              updated_at     = NOW()
          WHERE id = $3`,
         [targetDate, days, sub.id]
@@ -291,7 +292,7 @@ export async function getMySubscriptions(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// ── Admin: mark delivered (manual, without generating order) ───────────────────
+// ── Admin: mark delivered — COD collected, payment auto-set to paid ────────────
 export async function markDelivered(req, res) {
   try {
     const { rows: sub } = await query(
@@ -301,18 +302,25 @@ export async function markDelivered(req, res) {
     if (!sub[0]) return res.status(404).json({ error: 'Subscription not found' })
     const days = sub[0].frequency_days || 1
     const today = new Date().toISOString().split('T')[0]
+    const deliveryDate = sub[0].next_delivery
+      ? String(sub[0].next_delivery).split('T')[0]
+      : today
 
+    // Record delivery: COD is collected at the door → payment_status = paid
     await query(
-      `INSERT INTO subscription_deliveries (subscription_id, delivery_date, status, payment_status, payment_amount)
-       VALUES ($1,$2,'delivered','cod_due',$3)`,
-      [req.params.id, sub[0].next_delivery || today, sub[0].price_per_cycle]
+      `INSERT INTO subscription_deliveries
+         (subscription_id, delivery_date, status, payment_status, payment_amount)
+       VALUES ($1,$2,'delivered','paid',$3)`,
+      [req.params.id, deliveryDate, sub[0].price_per_cycle]
     ).catch(() => {})
 
+    // Advance next_delivery, increment delivery_count, mark this cycle paid
     const { rows } = await query(
       `UPDATE subscriptions
-       SET delivery_count = delivery_count + 1,
-           next_delivery  = COALESCE(next_delivery, CURRENT_DATE) + ($1 || ' days')::interval,
-           updated_at     = NOW()
+       SET delivery_count  = delivery_count + 1,
+           next_delivery   = COALESCE(next_delivery, CURRENT_DATE) + ($1 || ' days')::interval,
+           payment_status  = 'paid',
+           updated_at      = NOW()
        WHERE id=$2 RETURNING *`,
       [days, req.params.id]
     )
