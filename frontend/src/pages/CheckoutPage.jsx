@@ -6,6 +6,7 @@ import { useProducts } from '../context/ProductsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { DELIVERY_SLOTS, OWNER_UPI_ID, calcDelivery, FREE_DELIVERY_THRESHOLD, generateOrderId } from '../utils/constants'
+import { useAddresses } from '../context/AddressContext'
 
 const STEPS = [
   { id: 1, label: 'Delivery'  },
@@ -20,6 +21,7 @@ export default function CheckoutPage() {
   const { user }        = useAuth()
   const { addToast }    = useToast()
   const navigate        = useNavigate()
+  const { addresses, LABEL_ICONS } = useAddresses()
 
   const [step, setStep]   = useState(1)
   const [placing, setPlacing] = useState(false)
@@ -74,6 +76,20 @@ export default function CheckoutPage() {
   function setField(key, val) {
     setForm((f) => ({ ...f, [key]: val }))
     if (errors[key]) setErrors((e) => { const n = {...e}; delete n[key]; return n })
+  }
+
+  function fillFromAddress(addr) {
+    setForm(f => ({
+      ...f,
+      name:    addr.name    || f.name,
+      phone:   addr.phone   || f.phone,
+      address: addr.address || f.address,
+      city:    addr.city    || f.city,
+      pincode: addr.pincode || f.pincode,
+      notes:   addr.notes   || '',
+    }))
+    setErrors({})
+    addToast(`Address filled from ${addr.label}`, 'success', 2000)
   }
 
   function validateStep1() {
@@ -228,6 +244,36 @@ export default function CheckoutPage() {
                 </svg>
                 Delivery Information
               </h2>
+
+              {/* ── Saved Addresses Quick-Pick ── */}
+              {addresses.length > 0 && (
+                <div className="mb-5">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Saved Addresses</p>
+                  <div className="flex flex-col gap-2">
+                    {addresses.map(addr => (
+                      <button
+                        key={addr.id}
+                        type="button"
+                        onClick={() => fillFromAddress(addr)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-gray-100 hover:border-forest-300 hover:bg-forest-50 text-left transition-all duration-200 active:scale-[0.98]"
+                      >
+                        <span className="text-xl">{LABEL_ICONS[addr.label] || '📍'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800">{addr.label} · {addr.name}</p>
+                          <p className="text-xs text-gray-400 truncate">{addr.address}, {addr.city} – {addr.pincode}</p>
+                        </div>
+                        <span className="text-xs text-forest-600 font-semibold flex-shrink-0 whitespace-nowrap">Use →</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 mb-1">
+                    <div className="flex-1 h-px bg-gray-100" />
+                    <span className="text-xs text-gray-400">or fill manually</span>
+                    <div className="flex-1 h-px bg-gray-100" />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Full Name" placeholder="e.g. Priya Sharma" value={form.name} onChange={(v) => setField('name', v)} error={errors.name} required />

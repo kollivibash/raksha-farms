@@ -15,6 +15,7 @@ import { OrdersProvider }   from './context/OrdersContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { WishlistProvider } from './context/WishlistContext'
 import { LocationProvider } from './context/LocationContext'
+import { AddressProvider }  from './context/AddressContext'
 import Navbar               from './components/Navbar'
 import Footer               from './components/Footer'
 import BottomNav            from './components/BottomNav'
@@ -50,6 +51,7 @@ export default function App() {
         <OrdersProvider>
           <WishlistProvider>
             <CartProvider>
+              <AddressProvider>
               <AuthProvider>
                 <Router>
                   <ScrollToTop />
@@ -78,6 +80,7 @@ export default function App() {
                   </div>
                 </Router>
               </AuthProvider>
+              </AddressProvider>
             </CartProvider>
           </WishlistProvider>
         </OrdersProvider>
