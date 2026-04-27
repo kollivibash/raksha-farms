@@ -10,6 +10,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        value: postgresql://raksha_admin:UAS7PWyip0C4K4vECbyptuHZpU0pHC7X@dpg-d7j2ltn7f7vs739i2oeg-a.singapore-postgres.render.com/raksha_farms
       - key: ADMIN_SECRET
         value: raksha@admin2024
       - key: JWT_SECRET
