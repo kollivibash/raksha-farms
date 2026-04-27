@@ -195,8 +195,8 @@ export default function OrdersPage() {
   async function changeStatus(id, newStatus) {
     try {
       await ordersAPI.updateStatus(id, newStatus)
+      // Immediate optimistic update — no forceReload (would overwrite with stale data)
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-      forceReload()
     } catch(e) {
       showToast(e.response?.data?.error || 'Status update failed', 'error')
     }
@@ -208,18 +208,25 @@ export default function OrdersPage() {
         rejection_notes: remarks,
         rejected_items:  rejectedItems,
       })
-      // Immediately patch the row in the table using the backend's response
-      // (same pattern as changeStatus — no waiting for forceReload)
+      // Immediately patch the row in the table using the server's own response.
+      // Do NOT call forceReload() here — that would re-fetch and overwrite this
+      // with whatever the server has cached, losing the update we just applied.
       setOrders(prev => prev.map(o => {
         if (o.id !== orderId) return o
         const updItems = Array.isArray(updated.items)
           ? updated.items
           : (() => { try { return JSON.parse(updated.items || '[]') } catch { return o.items } })()
-        return { ...o, ...updated, items: updItems }
+        return {
+          ...o,
+          status:     updated.status,
+          total:      updated.total,
+          notes:      updated.notes,
+          updated_at: updated.updated_at,
+          items:      updItems,
+        }
       }))
       setRejectOrder(null)
-      showToast(newStatus === 'rejected' ? 'Order rejected successfully' : 'Partial rejection saved ✓')
-      forceReload()   // also refresh the full list from server in background
+      showToast(newStatus === 'rejected' ? '❌ Order rejected' : '⚠️ Partial rejection saved')
     } catch(e) {
       const msg = e.response?.data?.error || e.message || 'Failed to reject order'
       console.error('reject error:', e)
