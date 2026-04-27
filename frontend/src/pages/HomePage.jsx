@@ -247,20 +247,19 @@ export default function HomePage() {
             <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
             <div className="relative flex flex-col md:flex-row items-center gap-6">
               <div className="flex-1">
-                <span className="inline-block bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full mb-3">🌱 Subscribe & Save</span>
-                <h2 className="text-2xl md:text-3xl font-black text-white mb-2">Never Run Out of Fresh Microgreens</h2>
-                <p className="text-white/80 text-sm md:text-base">Get daily or weekly deliveries of our freshest microgreens. Cancel anytime, save 10% on every order.</p>
+                <span className="inline-block bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full mb-3">🔄 Subscribe & Save</span>
+                <h2 className="text-2xl md:text-3xl font-black text-white mb-2">Never Run Out of Farm-Fresh Goodness</h2>
+                <p className="text-white/80 text-sm md:text-base">Subscribe to daily or weekly deliveries of your favourite vegetables, greens & more — straight from our farm to your doorstep. Contact us to set up your custom plan.</p>
               </div>
               <div className="flex-shrink-0">
                 <a
-                  href="#products"
-                  onClick={(e) => { e.preventDefault(); setActiveCategory('microgreens'); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }) }}
+                  href="tel:+919346566945"
                   className="inline-flex items-center gap-2 bg-white text-earth-600 font-bold px-7 py-3.5 rounded-2xl hover:bg-earth-50 transition-all shadow-lg text-sm"
                 >
-                  Shop Microgreens
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
+                  Call to Subscribe
                 </a>
               </div>
             </div>
