@@ -4,11 +4,10 @@ const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','deli
 
 export async function createOrder(req, res) {
   try {
-    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId } = req.body
+    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId, subscription_plan_id } = req.body
     if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
 
     // Build address JSONB from customer object
-    // Email priority: authenticated JWT > customer form field > empty string
     const emailForAddress = req.user?.email || customer?.email || ''
     const address = {
       name:    customer?.name    || '',
@@ -41,7 +40,28 @@ export async function createOrder(req, res) {
         referenceId || null,
       ]
     )
-    res.status(201).json(rows[0])
+    const order = rows[0]
+
+    // If a subscription plan was selected, create a subscription record
+    if (subscription_plan_id && userId) {
+      try {
+        const { rows: planRows } = await query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
+        const plan = planRows[0]
+        if (plan) {
+          const nextDelivery = new Date()
+          nextDelivery.setDate(nextDelivery.getDate() + (plan.frequency_days || 1))
+          await query(
+            `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, true)`,
+            [userId, plan.id, JSON.stringify(items), total, plan.frequency, nextDelivery.toISOString().split('T')[0]]
+          )
+        }
+      } catch(subErr) {
+        console.error('Subscription save error (non-fatal):', subErr.message)
+      }
+    }
+
+    res.status(201).json(order)
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 

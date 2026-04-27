@@ -170,7 +170,7 @@ export default function CheckoutPage() {
       const backendRes = await fetch(`${BACKEND_URL}/api/orders`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label, referenceId: orderId }),
+        body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label, referenceId: orderId, subscription_plan_id: orderType === 'subscription' && selectedPlan ? selectedPlan.id : null }),
       })
       if (backendRes.ok) {
         const data = await backendRes.json()
