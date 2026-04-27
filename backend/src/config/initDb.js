@@ -186,6 +186,21 @@ export async function initDb() {
       console.log('✅ Default categories seeded')
     }
 
+    // ── subscription_deliveries — per-cycle delivery + payment history ──────
+    await query(`
+      CREATE TABLE IF NOT EXISTS subscription_deliveries (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        subscription_id UUID REFERENCES subscriptions(id) ON DELETE CASCADE,
+        delivery_date   DATE NOT NULL,
+        status          VARCHAR(20) DEFAULT 'pending',
+        order_id        UUID REFERENCES orders(id) ON DELETE SET NULL,
+        payment_status  VARCHAR(20) DEFAULT 'cod_due',
+        payment_amount  DECIMAL(10,2),
+        notes           TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {})
+
     // Migrate subscriptions table — old schema had product_id, new schema uses plan_id + items
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan_id UUID REFERENCES subscription_plans(id) ON DELETE SET NULL`).catch(() => {})
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'`).catch(() => {})
@@ -194,6 +209,9 @@ export async function initDb() {
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS delivery_count INTEGER DEFAULT 0`).catch(() => {})
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS skipped_count INTEGER DEFAULT 0`).catch(() => {})
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS start_date DATE DEFAULT CURRENT_DATE`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'cod_due'`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS address JSONB`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS notes TEXT`).catch(() => {})
     // Widen frequency column to support 'bi-weekly' etc
     await query(`ALTER TABLE subscriptions ALTER COLUMN frequency TYPE VARCHAR(30)`).catch(() => {})
 

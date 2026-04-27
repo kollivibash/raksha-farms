@@ -77,12 +77,16 @@ export const couponsAPI = {
   delete: (id) => api.delete(`/coupons/${id}`),
 }
 
-// ── Subscriptions (Customer) ──────────────────────────
+// ── Subscriptions (Admin) ─────────────────────────────
 export const subscriptionsAPI = {
-  getAll:         ()         => api.get('/subscriptions'),
-  update:         (id, data) => api.put(`/subscriptions/${id}`, data),
-  markDelivered:  (id)       => api.post(`/subscriptions/${id}/mark-delivered`),
-  skipDelivery:   (id)       => api.post(`/subscriptions/${id}/skip`),
+  getAll:          ()           => api.get('/subscriptions'),
+  getDashboard:    ()           => api.get('/subscriptions/dashboard'),
+  getCalendar:     (from, to)   => api.get('/subscriptions/calendar', { params: { from, to } }),
+  generateOrders:  (date)       => api.post('/subscriptions/generate-orders', { date }),
+  getDetail:       (id)         => api.get(`/subscriptions/${id}/detail`),
+  update:          (id, data)   => api.put(`/subscriptions/${id}`, data),
+  markDelivered:   (id)         => api.post(`/subscriptions/${id}/mark-delivered`),
+  skipDelivery:    (id)         => api.post(`/subscriptions/${id}/skip`),
 }
 
 // ── Subscription Plans (Admin) ─────────────────────────
