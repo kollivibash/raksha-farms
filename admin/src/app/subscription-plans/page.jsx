@@ -27,7 +27,7 @@ export default function SubscriptionPlansPage() {
 
   async function fetchPlans() {
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('admin_token')
       const res = await fetch(`${API_URL}/api/subscription-plans/admin/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -69,7 +69,7 @@ export default function SubscriptionPlansPage() {
   async function savePlan(e) {
     e.preventDefault()
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('admin_token')
       const method = editId ? 'PUT' : 'POST'
       const url = editId ? `${API_URL}/api/subscription-plans/${editId}` : `${API_URL}/api/subscription-plans`
 
@@ -100,7 +100,7 @@ export default function SubscriptionPlansPage() {
   async function deletePlan(id) {
     if (!confirm('Delete this subscription plan?')) return
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('admin_token')
       await fetch(`${API_URL}/api/subscription-plans/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
