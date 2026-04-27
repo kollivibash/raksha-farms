@@ -85,8 +85,8 @@ export default function Navbar() {
         </div>
 
         {/* Main nav */}
-        <nav className={`transition-all duration-300 ${
-          scrolled ? 'bg-white/97 backdrop-blur-md shadow-soft' : 'bg-white/92 backdrop-blur-sm'
+        <nav className={`transition-all duration-300 bg-white ${
+          scrolled ? 'shadow-md' : 'shadow-sm border-b border-gray-100'
         }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
