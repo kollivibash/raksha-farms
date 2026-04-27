@@ -432,6 +432,12 @@ export default function OrdersPage() {
                           {(Array.isArray(o.items) ? o.items : []).slice(0,2).map(i => i.name).join(', ')}
                           {(Array.isArray(o.items) ? o.items.length : 0) > 2 ? '…' : ''}
                         </p>
+                        {/* Show rejected items inline so admin knows at a glance */}
+                        {rejectionInfo?.rejected_items?.length > 0 && (
+                          <p className="text-xs text-red-500 font-semibold mt-0.5 truncate max-w-36">
+                            ❌ {rejectionInfo.rejected_items.map(r => r.name).join(', ')}
+                          </p>
+                        )}
                       </td>
                       {/* Total */}
                       <td className="px-4 py-3 text-right">
@@ -490,13 +496,37 @@ export default function OrdersPage() {
                             {/* Items */}
                             <div className="md:col-span-2">
                               <p className="font-semibold text-gray-700 mb-2">🛒 Items Ordered</p>
+
+                              {/* Rejection summary banner — shown when any items rejected */}
+                              {rejectionInfo?.rejected_items?.length > 0 && (
+                                <div className={`mb-3 p-3 rounded-xl border ${isPartialRejection ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+                                  <p className={`text-xs font-bold mb-1 ${isPartialRejection ? 'text-orange-700' : 'text-red-700'}`}>
+                                    {isPartialRejection ? '⚠️ Partially Rejected' : '❌ All Items Rejected'}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {rejectionInfo.rejected_items.map((r, i) => (
+                                      <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
+                                        ✕ {r.name}
+                                        {r.quantity && r.price ? <span className="font-normal opacity-70">×{r.quantity} ₹{r.price * r.quantity}</span> : null}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {rejectionInfo?.remarks && (
+                                    <p className="mt-2 text-xs text-red-600 italic">"{rejectionInfo.remarks}"</p>
+                                  )}
+                                </div>
+                              )}
+
                               <div className="space-y-1.5">
                                 {(Array.isArray(o.items) ? o.items : []).map((item, i) => {
                                   const isRejected = rejectionInfo?.rejected_items?.some(r => r.id === item.id || r.name === item.name)
                                   return (
-                                    <div key={i} className={`flex justify-between items-center text-gray-600 px-3 py-1.5 rounded-lg ${isRejected ? 'bg-red-50 line-through text-red-400' : 'bg-white'}`}>
-                                      <span>{item.emoji} {item.name} × {item.quantity} {item.unit} {isRejected && <span className="text-red-500 no-underline text-xs font-semibold not-italic">(Rejected)</span>}</span>
-                                      <span className="font-semibold">₹{item.price * item.quantity}</span>
+                                    <div key={i} className={`flex justify-between items-center text-gray-600 px-3 py-1.5 rounded-lg ${isRejected ? 'bg-red-50 text-red-400' : 'bg-white'}`}>
+                                      <span className={`flex items-center gap-1.5 ${isRejected ? 'line-through' : ''}`}>
+                                        {item.emoji} {item.name} × {item.quantity} {item.unit}
+                                        {isRejected && <span className="no-underline text-[10px] bg-red-200 text-red-700 px-1.5 py-0.5 rounded-full font-bold not-italic ml-1">Rejected</span>}
+                                      </span>
+                                      <span className={`font-semibold ${isRejected ? 'line-through' : ''}`}>₹{item.price * item.quantity}</span>
                                     </div>
                                   )
                                 })}
@@ -504,12 +534,6 @@ export default function OrdersPage() {
                               <div className="mt-2 pt-2 border-t border-green-200 flex justify-between font-bold text-gray-800 px-3">
                                 <span>Total</span><span>₹{Number(o.total).toLocaleString()}</span>
                               </div>
-                              {rejectionInfo?.remarks && (
-                                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
-                                  <p className="text-xs font-semibold text-red-700 mb-0.5">Rejection Remarks:</p>
-                                  <p className="text-sm text-red-600">{rejectionInfo.remarks}</p>
-                                </div>
-                              )}
                             </div>
 
                             {/* Delivery */}
