@@ -43,28 +43,25 @@ export default function MyOrdersPage() {
         setSyncMsg('Checking server for your orders…')
       }
 
-      // 1. JWT sync (always run if logged in)
       const token = localStorage.getItem('auth_token')
+      const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
+
+      // 1. JWT sync — fetches /api/orders/mine and applies ALL fields
+      //    (status, notes, total) to localStorage via applyBackendOrders
       if (token) {
         try {
-          const res = await fetch(`${BACKEND_URL}/api/orders/mine`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          const data = await res.json()
-          if (res.ok && Array.isArray(data)) {
-            if (isMount) setSyncMsg(`Loaded ${data.length} order(s)`)
-            await syncOrdersByUser()
-          }
-        } catch { /* silent on background sync */ }
+          await syncOrdersByUser()
+          if (isMount) setSyncMsg('Orders synced ✓')
+        } catch { /* silent */ }
       }
 
-      // 2. Phone sync — ALWAYS run (not just as fallback) so rejection notes
-      //    are picked up even for orders originally synced by phone
-      const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
+      // 2. Phone sync — ALWAYS run after JWT sync (not just as fallback)
+      //    This is what picks up rejection notes for orders found by phone.
+      //    Previously had an early `return` that skipped this for logged-in users — FIXED.
       const phone = user?.phone || savedAddr.phone
       if (phone) {
         if (isMount && !token) setSyncMsg(`Searching by phone ${phone}…`)
-        await syncOrdersByPhone(phone)
+        try { await syncOrdersByPhone(phone) } catch { /* silent */ }
       }
 
       if (isMount) setSyncing(false)

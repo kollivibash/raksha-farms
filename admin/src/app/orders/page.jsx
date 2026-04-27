@@ -204,13 +204,22 @@ export default function OrdersPage() {
 
   async function handleRejectConfirm(orderId, newStatus, remarks, rejectedItems) {
     try {
-      await ordersAPI.updateStatus(orderId, newStatus, {
+      const { data: updated } = await ordersAPI.updateStatus(orderId, newStatus, {
         rejection_notes: remarks,
         rejected_items:  rejectedItems,
       })
+      // Immediately patch the row in the table using the backend's response
+      // (same pattern as changeStatus — no waiting for forceReload)
+      setOrders(prev => prev.map(o => {
+        if (o.id !== orderId) return o
+        const updItems = Array.isArray(updated.items)
+          ? updated.items
+          : (() => { try { return JSON.parse(updated.items || '[]') } catch { return o.items } })()
+        return { ...o, ...updated, items: updItems }
+      }))
       setRejectOrder(null)
-      showToast(newStatus === 'rejected' ? 'Order rejected successfully' : 'Partial rejection saved')
-      forceReload()   // bump tick → triggers useEffect → calls load() with fresh filters
+      showToast(newStatus === 'rejected' ? 'Order rejected successfully' : 'Partial rejection saved ✓')
+      forceReload()   // also refresh the full list from server in background
     } catch(e) {
       const msg = e.response?.data?.error || e.message || 'Failed to reject order'
       console.error('reject error:', e)
