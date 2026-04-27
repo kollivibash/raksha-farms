@@ -24,7 +24,7 @@ const STATUS_COLORS = {
 // ── Rejection Modal ──────────────────────────────────────────────────────────
 function RejectModal({ order, onClose, onConfirm }) {
   const items = Array.isArray(order.items) ? order.items : []
-  const [checkedIds, setCheckedIds] = useState(new Set(items.map((_,i) => i)))
+  const [checkedIds, setCheckedIds] = useState(new Set())  // nothing checked by default
   const [remarks, setRemarks] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -36,12 +36,12 @@ function RejectModal({ order, onClose, onConfirm }) {
     })
   }
 
-  const allSelected   = checkedIds.size === items.length
+  const allSelected   = checkedIds.size === items.length && items.length > 0
   const noneSelected  = checkedIds.size === 0
   const partialReject = checkedIds.size > 0 && checkedIds.size < items.length
 
   async function handleSubmit() {
-    if (noneSelected) { alert('Select at least one item to reject'); return }
+    if (noneSelected) { alert('Please check at least one item to reject'); return }
     setSubmitting(true)
     const rejectedItems = items
       .filter((_, i) => checkedIds.has(i))
@@ -87,11 +87,17 @@ function RejectModal({ order, onClose, onConfirm }) {
           </div>
 
           {/* Summary */}
-          <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm">
-            {allSelected && <p className="text-orange-700 font-semibold">⚠️ All items rejected → Order status: <span className="text-red-600">Rejected</span></p>}
-            {partialReject && <p className="text-orange-700 font-semibold">⚠️ Partial rejection → Order status: <span className="text-green-600">Accepted</span> (only selected items rejected)</p>}
-            <p className="text-orange-600 text-xs mt-1">Rejected value: ₹{rejectedTotal} — stock will be restored automatically</p>
-          </div>
+          {noneSelected ? (
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500">
+              ☝️ Check the items above that you want to <strong>reject</strong>
+            </div>
+          ) : (
+            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm">
+              {allSelected && <p className="text-orange-700 font-semibold">⚠️ All items rejected → Order status: <span className="text-red-600">Rejected</span></p>}
+              {partialReject && <p className="text-orange-700 font-semibold">⚠️ Partial rejection → Order status: <span className="text-green-600">Accepted</span> (only checked items rejected)</p>}
+              <p className="text-orange-600 text-xs mt-1">Rejected value: ₹{rejectedTotal} — stock will be restored automatically</p>
+            </div>
+          )}
 
           {/* Remarks */}
           <div className="mt-4">
