@@ -191,6 +191,9 @@ export async function initDb() {
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'`).catch(() => {})
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS price_per_cycle DECIMAL(10,2) NOT NULL DEFAULT 0`).catch(() => {})
     await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS delivery_count INTEGER DEFAULT 0`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS skipped_count INTEGER DEFAULT 0`).catch(() => {})
+    await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS start_date DATE DEFAULT CURRENT_DATE`).catch(() => {})
     // Widen frequency column to support 'bi-weekly' etc
     await query(`ALTER TABLE subscriptions ALTER COLUMN frequency TYPE VARCHAR(30)`).catch(() => {})
 

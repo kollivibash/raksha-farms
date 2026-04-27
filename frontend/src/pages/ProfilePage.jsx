@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useOrders } from '../context/OrdersContext'
@@ -18,6 +18,63 @@ export default function ProfilePage() {
   const navigate     = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
+
+  // Subscriptions state
+  const [mySubs, setMySubs]         = useState([])
+  const [subsLoading, setSubsLoading] = useState(false)
+  const [busySub, setBusySub]       = useState(null)
+
+  useEffect(() => {
+    if (activeTab === 'subscriptions') fetchMySubs()
+  }, [activeTab])
+
+  async function fetchMySubs() {
+    setSubsLoading(true)
+    try {
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      const token = localStorage.getItem('auth_token')
+      const res = await fetch(`${BACKEND_URL}/api/subscriptions/mine`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      setMySubs(Array.isArray(data) ? data : [])
+    } catch(e) { console.error(e) }
+    finally { setSubsLoading(false) }
+  }
+
+  async function toggleSub(id) {
+    setBusySub(id)
+    try {
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      const token = localStorage.getItem('auth_token')
+      await fetch(`${BACKEND_URL}/api/subscriptions/${id}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      fetchMySubs()
+    } catch(e) { console.error(e) }
+    finally { setBusySub(null) }
+  }
+
+  async function cancelSub(id) {
+    if (!confirm('Cancel this subscription? This cannot be undone.')) return
+    setBusySub(id)
+    try {
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      const token = localStorage.getItem('auth_token')
+      await fetch(`${BACKEND_URL}/api/subscriptions/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      fetchMySubs()
+    } catch(e) { console.error(e) }
+    finally { setBusySub(null) }
+  }
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return null
+    return Math.ceil((new Date(dateStr) - new Date()) / 86400000)
+  }
 
   // Address form state
   const [showForm, setShowForm]       = useState(false)
@@ -45,9 +102,10 @@ export default function ProfilePage() {
   const totalSpent      = deliveredOrders.reduce((s, o) => s + o.total, 0)
 
   const TABS = [
-    { id: 'overview',   label: 'Overview' },
-    { id: 'addresses',  label: `Addresses${addresses.length ? ` (${addresses.length})` : ''}` },
-    { id: 'orders',     label: `Orders (${orders.length})` },
+    { id: 'overview',       label: 'Overview' },
+    { id: 'subscriptions',  label: `Subscriptions${mySubs.length ? ` (${mySubs.length})` : ''}` },
+    { id: 'addresses',      label: `Addresses${addresses.length ? ` (${addresses.length})` : ''}` },
+    { id: 'orders',         label: `Orders (${orders.length})` },
   ]
 
   // ── Address form helpers ──────────────────────────────────────────────────
@@ -194,6 +252,99 @@ export default function ProfilePage() {
       )}
 
       {/* ── ADDRESSES ── */}
+      {/* ── SUBSCRIPTIONS ── */}
+      {activeTab === 'subscriptions' && (
+        <div className="animate-slide-up space-y-4">
+          {subsLoading ? (
+            <div className="card p-12 text-center text-gray-400">Loading your subscriptions…</div>
+          ) : mySubs.length === 0 ? (
+            <div className="card p-12 text-center">
+              <p className="text-4xl mb-3">🔄</p>
+              <p className="font-semibold text-gray-600 mb-1">No active subscriptions</p>
+              <p className="text-sm text-gray-400 mb-4">Subscribe during checkout to get regular deliveries</p>
+              <Link to="/" className="btn-primary inline-flex text-sm">Shop & Subscribe</Link>
+            </div>
+          ) : (
+            mySubs.map(sub => {
+              const items = Array.isArray(sub.items) ? sub.items : []
+              const days  = daysUntil(sub.next_delivery)
+              const isBusy = busySub === sub.id
+
+              let deliveryLabel = '—'
+              let deliveryColor = 'text-gray-500'
+              if (days !== null) {
+                if (days < 0)   { deliveryLabel = `Overdue by ${Math.abs(days)} day${Math.abs(days)>1?'s':''}`; deliveryColor = 'text-red-500' }
+                else if (days === 0) { deliveryLabel = 'Today!'; deliveryColor = 'text-green-600' }
+                else if (days === 1) { deliveryLabel = 'Tomorrow'; deliveryColor = 'text-orange-500' }
+                else               { deliveryLabel = `In ${days} days`; deliveryColor = 'text-gray-600' }
+              }
+
+              return (
+                <div key={sub.id} className={`card p-5 ${!sub.is_active ? 'opacity-70' : ''}`}>
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">🔄</span>
+                        <p className="font-bold text-gray-900">{sub.plan_name || 'Subscription'}</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sub.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {sub.is_active ? 'Active' : 'Paused'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 capitalize">{sub.frequency} delivery · ₹{parseFloat(sub.price_per_cycle||0).toFixed(0)}/cycle</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={isBusy}
+                        onClick={() => toggleSub(sub.id)}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${sub.is_active ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
+                      >
+                        {sub.is_active ? 'Pause' : 'Resume'}
+                      </button>
+                      <button
+                        disabled={isBusy}
+                        onClick={() => cancelSub(sub.id)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Delivery countdown */}
+                  <div className="bg-sage-50 rounded-xl p-3 mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium">Next Delivery</p>
+                      <p className={`font-bold text-sm mt-0.5 ${deliveryColor}`}>{deliveryLabel}</p>
+                      {sub.next_delivery && (
+                        <p className="text-xs text-gray-400">{new Date(sub.next_delivery).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 font-medium">Deliveries Done</p>
+                      <p className="font-bold text-2xl text-forest-600">{sub.delivery_count || 0}</p>
+                    </div>
+                  </div>
+
+                  {/* Items */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Items</p>
+                    <div className="space-y-1.5">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex justify-between text-sm text-gray-700">
+                          <span>{item.emoji} {item.name} ×{item.quantity} {item.unit}</span>
+                          <span className="font-medium">₹{item.price * item.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+
       {activeTab === 'addresses' && (
         <div className="animate-slide-up space-y-4">
 

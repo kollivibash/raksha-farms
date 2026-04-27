@@ -77,8 +77,10 @@ export const couponsAPI = {
 
 // ── Subscriptions (Customer) ──────────────────────────
 export const subscriptionsAPI = {
-  getAll: () => api.get('/subscriptions'),
-  update: (id, data) => api.put(`/subscriptions/${id}`, data),
+  getAll:         ()         => api.get('/subscriptions'),
+  update:         (id, data) => api.put(`/subscriptions/${id}`, data),
+  markDelivered:  (id)       => api.post(`/subscriptions/${id}/mark-delivered`),
+  skipDelivery:   (id)       => api.post(`/subscriptions/${id}/skip`),
 }
 
 // ── Subscription Plans (Admin) ─────────────────────────
