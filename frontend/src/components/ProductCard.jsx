@@ -251,7 +251,8 @@ export default function ProductCard({ product }) {
             </span>
             <button
               onClick={increment}
-              className="w-9 h-9 rounded-lg bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 active:scale-90 transition-all duration-200 text-lg leading-none"
+              disabled={product.stock > 0 && cartItem.quantity >= product.stock}
+              className="w-9 h-9 rounded-lg bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 active:scale-90 transition-all duration-200 text-lg leading-none disabled:opacity-40 disabled:cursor-not-allowed"
             >
               +
             </button>

@@ -174,20 +174,26 @@ function CartItem({ item, onRemove, onQtyChange }) {
         <p className="text-gray-400 text-xs mt-0.5">{item.unit}</p>
         <div className="flex items-center justify-between mt-2">
           {/* Qty stepper */}
-          <div className="flex items-center gap-1 bg-sage-50 rounded-lg p-0.5">
-            <button
-              onClick={() => onQtyChange(item.quantity - 1)}
-              className="w-7 h-7 rounded-md bg-white shadow-sm flex items-center justify-center text-forest-600 font-bold hover:bg-red-50 hover:text-red-500 transition-all text-sm"
-            >
-              −
-            </button>
-            <span className="w-6 text-center font-bold text-gray-700 text-sm">{item.quantity}</span>
-            <button
-              onClick={() => onQtyChange(item.quantity + 1)}
-              className="w-7 h-7 rounded-md bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 transition-all text-sm"
-            >
-              +
-            </button>
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex items-center gap-1 bg-sage-50 rounded-lg p-0.5">
+              <button
+                onClick={() => onQtyChange(item.quantity - 1)}
+                className="w-7 h-7 rounded-md bg-white shadow-sm flex items-center justify-center text-forest-600 font-bold hover:bg-red-50 hover:text-red-500 transition-all text-sm"
+              >
+                −
+              </button>
+              <span className="w-6 text-center font-bold text-gray-700 text-sm">{item.quantity}</span>
+              <button
+                onClick={() => onQtyChange(item.quantity + 1)}
+                disabled={item.stock > 0 && item.quantity >= item.stock}
+                className="w-7 h-7 rounded-md bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                +
+              </button>
+            </div>
+            {item.stock > 0 && item.quantity >= item.stock && (
+              <span className="text-[10px] text-orange-500 font-medium pl-0.5">Max {item.stock} available</span>
+            )}
           </div>
           {/* Price + remove */}
           <div className="flex items-center gap-2">

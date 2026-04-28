@@ -214,7 +214,11 @@ export default function ProductPage() {
               <div className="flex items-center gap-2 bg-forest-50 rounded-xl p-1.5">
                 <button onClick={() => updateQuantity(cartKey, cartItem.quantity - 1)} className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center text-forest-600 font-bold hover:bg-red-50 hover:text-red-500 transition-all text-xl">−</button>
                 <span className="font-bold text-forest-700 text-lg w-10 text-center">{cartItem.quantity}</span>
-                <button onClick={() => updateQuantity(cartKey, cartItem.quantity + 1)} className="w-10 h-10 rounded-lg bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 transition-all text-xl">+</button>
+                <button
+                  onClick={() => updateQuantity(cartKey, cartItem.quantity + 1)}
+                  disabled={product.stock > 0 && cartItem.quantity >= product.stock}
+                  className="w-10 h-10 rounded-lg bg-forest-500 shadow-sm flex items-center justify-center text-white font-bold hover:bg-forest-600 transition-all text-xl disabled:opacity-40 disabled:cursor-not-allowed"
+                >+</button>
               </div>
               <button onClick={openDrawer} className="btn-primary flex-1 flex items-center justify-center gap-2">
                 View Cart
