@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { productsAPI, categoriesAPI } from '../../lib/api'
-import { Plus, Pencil, Archive, Trash2, Search, X, RotateCcw, Package } from 'lucide-react'
+import { Plus, Pencil, Archive, Search, X, RotateCcw, Package } from 'lucide-react'
 
 const FALLBACK_CATEGORIES = [
   { slug:'vegetables', name:'Vegetables' },{ slug:'fruits', name:'Fruits' },
@@ -248,11 +248,6 @@ export default function ProductsPage() {
                         <RotateCcw size={15}/>
                       </button>
                     )}
-                    <button onClick={()=>handleHardDelete(p)}
-                      title="Permanently delete"
-                      className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition">
-                      <Trash2 size={15}/>
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -261,7 +256,7 @@ export default function ProductsPage() {
         </table>
         <div className="px-4 py-3 border-t border-gray-50 text-xs text-gray-400">
           {products.length} product{products.length !== 1 ? 's' : ''} shown
-          {statusFilter === '' && ' · Archive hides from website, Trash permanently deletes'}
+          {statusFilter === '' && ' · Archive hides from website · Permanent delete is in the Edit modal'}
         </div>
       </div>
 
@@ -356,6 +351,22 @@ export default function ProductsPage() {
                 </button>
               </div>
             </form>
+            {editing && (
+              <div className="mx-5 mb-5 border border-red-200 rounded-xl p-4 bg-red-50">
+                <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-1">⚠️ Danger Zone</p>
+                <p className="text-xs text-red-600 mb-3">
+                  Permanently deletes this product and all its data. Past orders referencing this product may lose item details.
+                  Archive instead if you just want to hide it from the website.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setShowModal(false); handleHardDelete(editing) }}
+                  className="w-full py-2 text-sm font-semibold text-red-600 border border-red-300 rounded-lg hover:bg-red-100 transition"
+                >
+                  Permanently Delete This Product
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

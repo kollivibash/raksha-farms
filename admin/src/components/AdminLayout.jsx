@@ -187,8 +187,7 @@ export default function AdminLayout({ children, title }) {
                       ) : (
                         <ul className="max-h-64 overflow-y-auto divide-y divide-gray-50">
                           {newOrders.map(o => {
-                            const addr = typeof o.address === 'string'
-                              ? JSON.parse(o.address || '{}') : (o.address || {})
+                            const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
                             const name  = o.customer_name || addr.name || 'Guest'
                             const items = Array.isArray(o.items) ? o.items.length : 0
                             const time  = new Date(o.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })

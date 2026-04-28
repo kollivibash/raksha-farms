@@ -88,6 +88,8 @@ export function AuthProvider({ children }) {
             localStorage.setItem('auth_token', data.token)
             const loggedUser = { ...data.user, avatar: payload.picture, provider: 'google' }
             setUser(loggedUser)
+            // Notify cart + address contexts to sync from backend
+            window.dispatchEvent(new CustomEvent('rf:login'))
             // Sync orders immediately — auth_token is now in localStorage
             setTimeout(() => syncAllOrders(), 300)
             return
@@ -123,6 +125,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('auth_token', data.token)
       const newUser = { ...data.user, provider: 'email' }
       setUser(newUser)
+      window.dispatchEvent(new CustomEvent('rf:login'))
       setTimeout(() => syncAllOrders(phone), 300)
       return newUser
     } finally {
@@ -149,6 +152,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('auth_token', data.token)
       const loggedUser = { ...data.user, provider: 'email' }
       setUser(loggedUser)
+      window.dispatchEvent(new CustomEvent('rf:login'))
       setTimeout(() => syncAllOrders(isPhone ? emailOrPhone : null), 300)
       return loggedUser
     } finally {

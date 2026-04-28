@@ -53,7 +53,7 @@ export default function CheckoutPage() {
   // Step 2: delivery slot
   const [selectedSlot, setSelectedSlot] = useState('morning')
 
-  // Step 3: payment
+  // Step 3: payment — 'card' is disabled (coming soon), default to upi
   const [paymentMethod, setPaymentMethod] = useState('upi')
 
   useEffect(() => { closeDrawer() }, [])
@@ -195,14 +195,24 @@ export default function CheckoutPage() {
       return
     }
 
-    // Save address for next order
-    localStorage.setItem('rf_saved_address', JSON.stringify({
+    // Save address for next order (localStorage for offline fallback)
+    const addrPayload = {
       name:    form.name.trim(),
       phone:   form.phone.trim(),
       address: form.address.trim(),
       city:    form.city.trim(),
       pincode: form.pincode.trim(),
-    }))
+    }
+    localStorage.setItem('rf_saved_address', JSON.stringify(addrPayload))
+    // Also persist to backend so it survives cache clears (for logged-in users)
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/addresses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...addrPayload, label: 'Home' }),
+      }).catch(() => {})
+    }
 
     addOrder({ ...order, backendId })
     // Stock already deducted server-side in transaction; sync local context so UI reflects it
@@ -485,7 +495,7 @@ export default function CheckoutPage() {
                 <PaymentOption id="cod" selected={paymentMethod === 'cod'} onSelect={() => setPaymentMethod('cod')}
                   icon={<CodIcon />} title="Cash on Delivery" subtitle="Pay when your order arrives" />
                 <PaymentOption id="card" selected={paymentMethod === 'card'} onSelect={() => setPaymentMethod('card')}
-                  icon={<CardIcon />} title="Credit / Debit Card" subtitle="Secure payment via Razorpay" />
+                  icon={<CardIcon />} title="Credit / Debit Card" subtitle="Coming soon — use UPI or COD for now" disabled />
               </div>
 
               {paymentMethod === 'upi' && (
@@ -514,11 +524,11 @@ export default function CheckoutPage() {
               )}
 
               {paymentMethod === 'card' && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-sm text-blue-700 flex gap-2 animate-slide-up">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-700 flex gap-2 animate-slide-up">
                   <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  You'll be redirected to Razorpay's secure payment gateway after placing the order.
+                  Card payments are coming soon. Please select UPI or Cash on Delivery to place your order.
                 </div>
               )}
 
@@ -537,7 +547,7 @@ export default function CheckoutPage() {
                   <div className="flex justify-between text-gray-500">
                     <span>Payment</span>
                     <span className="font-medium text-gray-700 capitalize">
-                      {paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'card' ? 'Card (Razorpay)' : 'UPI'}
+                      {paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'}
                     </span>
                   </div>
                 </div>
@@ -552,8 +562,8 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={placing}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2 bg-forest-500"
+                  disabled={placing || paymentMethod === 'card'}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 bg-forest-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {placing ? (
                     <>
@@ -641,11 +651,13 @@ function Field({ label, placeholder, value, onChange, error, required, textarea,
   )
 }
 
-function PaymentOption({ id, selected, onSelect, icon, title, subtitle, recommended }) {
+function PaymentOption({ id, selected, onSelect, icon, title, subtitle, recommended, disabled }) {
   return (
-    <button type="button" onClick={onSelect}
+    <button type="button" onClick={disabled ? undefined : onSelect} disabled={disabled}
       className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-        selected ? 'border-forest-500 bg-forest-50 shadow-sm' : 'border-gray-200 hover:border-forest-200 hover:bg-sage-50'
+        disabled  ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed' :
+        selected  ? 'border-forest-500 bg-forest-50 shadow-sm' :
+                    'border-gray-200 hover:border-forest-200 hover:bg-sage-50'
       }`}
     >
       <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center flex-shrink-0">{icon}</div>
@@ -653,12 +665,15 @@ function PaymentOption({ id, selected, onSelect, icon, title, subtitle, recommen
         <div className="flex items-center gap-1.5">
           <p className="font-semibold text-gray-800 text-sm">{title}</p>
           {recommended && <span className="badge bg-earth-100 text-earth-600 text-[10px]">Recommended</span>}
+          {disabled && <span className="badge bg-gray-100 text-gray-400 text-[10px]">Coming Soon</span>}
         </div>
         <p className="text-gray-400 text-xs mt-0.5">{subtitle}</p>
       </div>
-      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-forest-500 bg-forest-500' : 'border-gray-300'}`}>
-        {selected && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-      </div>
+      {!disabled && (
+        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-forest-500 bg-forest-500' : 'border-gray-300'}`}>
+          {selected && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+        </div>
+      )}
     </button>
   )
 }

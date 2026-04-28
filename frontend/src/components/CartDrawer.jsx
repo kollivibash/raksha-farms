@@ -106,6 +106,7 @@ export default function CartDrawer() {
                   item={item}
                   onRemove={() => removeFromCart(item.cartKey)}
                   onQtyChange={(qty) => updateQuantity(item.cartKey, qty)}
+                  onNavigate={closeDrawer}
                 />
               ))}
             </div>
@@ -154,11 +155,12 @@ export default function CartDrawer() {
   )
 }
 
-function CartItem({ item, onRemove, onQtyChange }) {
+function CartItem({ item, onRemove, onQtyChange, onNavigate }) {
   return (
     <div className="flex gap-3 py-2">
-      {/* Image */}
-      <div className="w-16 h-16 rounded-xl overflow-hidden bg-sage-50 flex-shrink-0">
+      {/* Image — tapping navigates to product page */}
+      <Link to={`/product/${item.id}`} onClick={onNavigate}
+        className="w-16 h-16 rounded-xl overflow-hidden bg-sage-50 flex-shrink-0 hover:opacity-90 transition-opacity">
         {item.image ? (
           <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
         ) : (
@@ -166,11 +168,14 @@ function CartItem({ item, onRemove, onQtyChange }) {
             {item.emoji || '🛒'}
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Details */}
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-800 text-sm leading-tight truncate">{item.name}</p>
+        <Link to={`/product/${item.id}`} onClick={onNavigate}
+          className="font-semibold text-gray-800 text-sm leading-tight truncate hover:text-forest-600 transition-colors block">
+          {item.name}
+        </Link>
         <p className="text-gray-400 text-xs mt-0.5">{item.unit}</p>
         <div className="flex items-center justify-between mt-2">
           {/* Qty stepper */}

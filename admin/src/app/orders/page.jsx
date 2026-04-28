@@ -267,7 +267,7 @@ export default function OrdersPage() {
       const rows = data.orders || []
       const headers = ['Order ID', 'Customer', 'Phone', 'Address', 'Items', 'Payment', 'Status', 'Total', 'Date']
       const lines = rows.map(o => {
-        const addr = typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {})
+        const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
         const items = (Array.isArray(o.items) ? o.items : []).map(i => `${i.name}×${i.quantity}`).join(' | ')
         return [
           o.reference_id || o.id,
@@ -399,7 +399,7 @@ export default function OrdersPage() {
               )}
               {orders.map(o => {
                 const isOpen = expanded === o.id
-                const addr = typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {})
+                const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
                 const rejectionInfo = (() => {
                   try {
                     if (!o.notes) return null
@@ -417,12 +417,17 @@ export default function OrdersPage() {
                       {/* Order ID */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
-                          {isOpen ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0"/> : <ChevronDown size={14} className="text-gray-400 flex-shrink-0"/>}
+                          {isOpen
+                            ? <ChevronUp size={12} className="text-gray-300 flex-shrink-0"/>
+                            : <ChevronDown size={12} className="text-gray-300 flex-shrink-0"/>
+                          }
                           <div>
+                            {o.order_number && (
+                              <p className="text-[10px] font-bold text-gray-400 mb-0.5"># {o.order_number}</p>
+                            )}
                             <p className="font-mono text-xs font-semibold text-[#1B4332]">
                               {o.reference_id || o.id?.slice(0,8)}
                             </p>
-                            {o.reference_id && <p className="text-[10px] text-gray-400 font-mono">{o.id?.slice(0,8)}</p>}
                           </div>
                         </div>
                       </td>
@@ -454,8 +459,14 @@ export default function OrdersPage() {
                       </td>
                       {/* Payment */}
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${o.payment_method === 'upi' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {o.payment_method === 'upi' ? '📱 UPI' : '💵 COD'}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          o.payment_method === 'upi'  ? 'bg-purple-100 text-purple-700' :
+                          o.payment_method === 'card' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-gray-100 text-gray-600'
+                        }`}>
+                          {o.payment_method === 'upi'  ? '📱 UPI' :
+                           o.payment_method === 'card' ? '💳 Card' :
+                                                         '💵 COD'}
                         </span>
                       </td>
                       {/* Status */}
@@ -478,12 +489,14 @@ export default function OrdersPage() {
                               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                             )}
                           </select>
-                          <button
-                            onClick={() => setRejectOrder({...o, items: Array.isArray(o.items) ? o.items : []})}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
-                            title="Reject order (with item selection)">
-                            <AlertTriangle size={14}/>
-                          </button>
+                          {!['delivered', 'cancelled', 'rejected'].includes(o.status) && (
+                            <button
+                              onClick={() => setRejectOrder({...o, items: Array.isArray(o.items) ? o.items : []})}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
+                              title="Reject order (with item selection)">
+                              <AlertTriangle size={14}/>
+                            </button>
+                          )}
                         </div>
                       </td>
                       {/* Date */}

@@ -220,6 +220,30 @@ export async function initDb() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)
     `).catch(() => {})
 
+    // Sequential order number — auto-increments across the whole store
+    await query(`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number SERIAL
+    `).catch(() => {})
+
+    // delivery_time column for marking actual delivery timestamp
+    await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_time TIMESTAMPTZ`).catch(() => {})
+
+    // Saved addresses table — allows users to save multiple named addresses
+    await query(`
+      CREATE TABLE IF NOT EXISTS user_addresses (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+        label      VARCHAR(30) DEFAULT 'Home',
+        name       VARCHAR(100),
+        phone      VARCHAR(20),
+        address    TEXT,
+        city       VARCHAR(100),
+        pincode    VARCHAR(10),
+        notes      TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {})
+
     // Ensure orders.status allows 'rejected' (old DBs had a CHECK without it)
     await query(`
       ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check

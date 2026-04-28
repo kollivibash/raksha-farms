@@ -51,22 +51,28 @@ export function CartProvider({ children }) {
     return () => { document.body.style.overflow = '' }
   }, [drawerOpen])
 
-  // On login (token appears): load backend cart and MERGE with local
-  useEffect(() => {
-    async function syncOnLogin() {
-      const backendItems = await loadCartFromBackend()
-      if (!backendItems?.length) return
-      setCart(prev => {
-        // Merge: backend items take priority, add any local-only items
-        const merged = [...backendItems]
-        prev.forEach(local => {
-          if (!merged.find(b => b.cartKey === local.cartKey)) merged.push(local)
-        })
-        return merged
+  // Merge backend cart into local state
+  async function mergeBackendCart() {
+    const backendItems = await loadCartFromBackend()
+    if (!backendItems?.length) return
+    setCart(prev => {
+      // Backend items take priority; local-only items are appended
+      const merged = [...backendItems]
+      prev.forEach(local => {
+        if (!merged.find(b => b.cartKey === local.cartKey)) merged.push(local)
       })
-    }
-    syncOnLogin()
-  }, []) // runs once on mount — token is already set if user was logged in
+      return merged
+    })
+  }
+
+  // On mount: sync if already logged in
+  useEffect(() => { mergeBackendCart() }, []) // eslint-disable-line
+
+  // On login (same tab): rf:login event is dispatched by AuthContext
+  useEffect(() => {
+    window.addEventListener('rf:login', mergeBackendCart)
+    return () => window.removeEventListener('rf:login', mergeBackendCart)
+  }, []) // eslint-disable-line
 
   function addToCart(product, quantity = 1, selectedVariant = null) {
     const key = selectedVariant ? `${product.id}_${selectedVariant.label}` : product.id

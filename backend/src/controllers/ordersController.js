@@ -23,11 +23,13 @@ export async function createOrder(req, res) {
         [item.id]
       )
       const prod = pRows[0]
-      // Product must exist in DB — is_active is a display flag only,
-      // not an order block (customer may have added it before it was archived)
       if (!prod) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: `Product "${item.name}" could not be found. Please remove it from your cart and try again.` })
+      }
+      if (!prod.is_active) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `"${prod.name}" is no longer available. Please remove it from your cart and try again.` })
       }
       if (prod.stock < item.quantity) {
         await client.query('ROLLBACK')
