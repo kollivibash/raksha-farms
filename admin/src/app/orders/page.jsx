@@ -270,7 +270,7 @@ export default function OrdersPage() {
         const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
         const items = (Array.isArray(o.items) ? o.items : []).map(i => `${i.name}×${i.quantity}`).join(' | ')
         return [
-          o.reference_id || o.id,
+          o.order_number ? `#${o.order_number}` : (o.reference_id || o.id),
           addr.name || o.customer_name || 'Guest',
           addr.phone || o.customer_phone || '',
           (addr.address || '').replace(/,/g, ';'),
@@ -416,14 +416,9 @@ export default function OrdersPage() {
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer select-none transition-colors">
                       {/* Order ID */}
                       <td className="px-4 py-3">
-                        <div>
-                          {o.order_number && (
-                            <p className="text-[10px] font-bold text-gray-400 mb-0.5"># {o.order_number}</p>
-                          )}
-                          <p className="font-mono text-xs font-semibold text-[#1B4332]">
-                            {o.reference_id || o.id?.slice(0,8)}
-                          </p>
-                        </div>
+                        <p className="font-bold text-[#1B4332] text-sm">
+                          # {o.order_number || o.id?.slice(0,6)}
+                        </p>
                       </td>
                       {/* Customer */}
                       <td className="px-4 py-3">
