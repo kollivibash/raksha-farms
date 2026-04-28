@@ -23,13 +23,15 @@ export async function createOrder(req, res) {
         [item.id]
       )
       const prod = pRows[0]
-      if (!prod || !prod.is_active) {
+      // Product must exist in DB — is_active is a display flag only,
+      // not an order block (customer may have added it before it was archived)
+      if (!prod) {
         await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Product "${item.name || item.id}" is no longer available` })
+        return res.status(400).json({ error: `Product "${item.name}" could not be found. Please remove it from your cart and try again.` })
       }
       if (prod.stock < item.quantity) {
         await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Insufficient stock for "${prod.name}". Available: ${prod.stock}` })
+        return res.status(400).json({ error: `Insufficient stock for "${prod.name}". Only ${prod.stock} available.` })
       }
       // Use server price (offer_price takes precedence)
       const serverPrice = prod.offer_price && Number(prod.offer_price) > 0
