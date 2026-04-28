@@ -270,7 +270,7 @@ export default function OrdersPage() {
         const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
         const items = (Array.isArray(o.items) ? o.items : []).map(i => `${i.name}×${i.quantity}`).join(' | ')
         return [
-          o.order_number ? `#${o.order_number}` : (o.reference_id || o.id),
+          new Date(o.created_at).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }),
           addr.name || o.customer_name || 'Guest',
           addr.phone || o.customer_phone || '',
           (addr.address || '').replace(/,/g, ';'),
@@ -375,24 +375,23 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Order ID</th>
+                <th className="text-left px-4 py-3 text-gray-500 font-medium">Order Date / Time</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Customer</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Items</th>
                 <th className="text-right px-4 py-3 text-gray-500 font-medium">Total</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Payment</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Status</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Actions</th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Date</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} className="py-16 text-center">
+                <tr><td colSpan={7} className="py-16 text-center">
                   <div className="inline-block w-6 h-6 border-2 border-[#1B4332] border-t-transparent rounded-full animate-spin"/>
                 </td></tr>
               )}
               {!loading && orders.length === 0 && (
-                <tr><td colSpan={8} className="py-16 text-center text-gray-400">
+                <tr><td colSpan={7} className="py-16 text-center text-gray-400">
                   <div className="text-3xl mb-2">📦</div>
                   No orders found
                 </td></tr>
@@ -416,8 +415,11 @@ export default function OrdersPage() {
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer select-none transition-colors">
                       {/* Order ID */}
                       <td className="px-4 py-3">
-                        <p className="font-bold text-[#1B4332] text-sm">
-                          # {o.order_number || o.id?.slice(0,6)}
+                        <p className="font-mono text-xs font-semibold text-[#1B4332] whitespace-nowrap">
+                          {new Date(o.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}
+                        </p>
+                        <p className="font-mono text-xs text-gray-500 whitespace-nowrap">
+                          {new Date(o.created_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false })}
                         </p>
                       </td>
                       {/* Customer */}
@@ -488,18 +490,12 @@ export default function OrdersPage() {
                           )}
                         </div>
                       </td>
-                      {/* Date */}
-                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                        {new Date(o.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}
-                        <br/>
-                        <span>{new Date(o.created_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}</span>
-                      </td>
                     </tr>
 
                     {/* Expanded row */}
                     {isOpen && (
                       <tr className="bg-green-50/60 border-b border-gray-100">
-                        <td colSpan={8} className="px-6 py-4">
+                        <td colSpan={7} className="px-6 py-4">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             {/* Items */}
                             <div className="md:col-span-2">
