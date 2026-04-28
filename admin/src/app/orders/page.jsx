@@ -270,7 +270,7 @@ export default function OrdersPage() {
         const addr = (() => { try { return typeof o.address === 'string' ? JSON.parse(o.address || '{}') : (o.address || {}) } catch { return {} } })()
         const items = (Array.isArray(o.items) ? o.items : []).map(i => `${i.name}×${i.quantity}`).join(' | ')
         return [
-          new Date(o.created_at).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }),
+          (() => { const d = new Date(o.created_at); const p = n => String(n).padStart(2,'0'); return `${p(d.getDate())}${p(d.getMonth()+1)}${d.getFullYear()}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}` })(),
           addr.name || o.customer_name || 'Guest',
           addr.phone || o.customer_phone || '',
           (addr.address || '').replace(/,/g, ';'),
@@ -375,7 +375,7 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Order Date / Time</th>
+                <th className="text-left px-4 py-3 text-gray-500 font-medium">Order ID</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Customer</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-medium">Items</th>
                 <th className="text-right px-4 py-3 text-gray-500 font-medium">Total</th>
@@ -415,11 +415,12 @@ export default function OrdersPage() {
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer select-none transition-colors">
                       {/* Order ID */}
                       <td className="px-4 py-3">
-                        <p className="font-mono text-xs font-semibold text-[#1B4332] whitespace-nowrap">
-                          {new Date(o.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}
-                        </p>
-                        <p className="font-mono text-xs text-gray-500 whitespace-nowrap">
-                          {new Date(o.created_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false })}
+                        <p className="font-mono text-xs font-semibold text-[#1B4332] whitespace-nowrap tracking-wide">
+                          {(() => {
+                            const d = new Date(o.created_at)
+                            const pad = n => String(n).padStart(2,'0')
+                            return `${pad(d.getDate())}${pad(d.getMonth()+1)}${d.getFullYear()}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+                          })()}
                         </p>
                       </td>
                       {/* Customer */}
