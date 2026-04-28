@@ -1,14 +1,7 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 export default function Footer() {
-  const navigate = useNavigate()
-
-  function goToCategory(catId) {
-    navigate(`/?category=${catId}`)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   return (
     <footer className="bg-green-950 text-green-100 pb-20 md:pb-0">
       {/* Top wave */}
@@ -19,7 +12,7 @@ export default function Footer() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
           {/* Brand */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
@@ -62,29 +55,6 @@ export default function Footer() {
                   >
                     {label}
                   </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Categories */}
-          <div>
-            <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-widest">Categories</h4>
-            <ul className="space-y-2.5 text-sm">
-              {[
-                { label: '🥦 Vegetables',       id: 'vegetables' },
-                { label: '🍎 Fruits',            id: 'fruits'     },
-                { label: '🌾 Whole Grains',      id: 'grains'     },
-                { label: '🫙 Wood-Pressed Oils', id: 'oils'       },
-                { label: '🌱 Microgreens',       id: 'microgreens'},
-              ].map(({ label, id }) => (
-                <li key={id}>
-                  <button
-                    onClick={() => goToCategory(id)}
-                    className="text-green-400 hover:text-white transition-colors duration-200 font-medium text-left"
-                  >
-                    {label}
-                  </button>
                 </li>
               ))}
             </ul>
