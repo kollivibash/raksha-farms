@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import StatusBadge from '../../components/StatusBadge'
 import { ordersAPI } from '../../lib/api'
-import { Search, RefreshCw, Download, X, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Search, RefreshCw, Download, X, AlertTriangle, CheckCircle } from 'lucide-react'
 
 const STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 const STATUS_LABELS = {
@@ -416,19 +416,13 @@ export default function OrdersPage() {
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer select-none transition-colors">
                       {/* Order ID */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          {isOpen
-                            ? <ChevronUp size={12} className="text-gray-300 flex-shrink-0"/>
-                            : <ChevronDown size={12} className="text-gray-300 flex-shrink-0"/>
-                          }
-                          <div>
-                            {o.order_number && (
-                              <p className="text-[10px] font-bold text-gray-400 mb-0.5"># {o.order_number}</p>
-                            )}
-                            <p className="font-mono text-xs font-semibold text-[#1B4332]">
-                              {o.reference_id || o.id?.slice(0,8)}
-                            </p>
-                          </div>
+                        <div>
+                          {o.order_number && (
+                            <p className="text-[10px] font-bold text-gray-400 mb-0.5"># {o.order_number}</p>
+                          )}
+                          <p className="font-mono text-xs font-semibold text-[#1B4332]">
+                            {o.reference_id || o.id?.slice(0,8)}
+                          </p>
                         </div>
                       </td>
                       {/* Customer */}
