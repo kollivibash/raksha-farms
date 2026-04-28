@@ -10,9 +10,22 @@ import {
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Use local date parts — toISOString() returns UTC which shifts date for IST (+5:30)
+function localDateStr(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function daysUntil(dateStr) {
   if (!dateStr) return null
-  return Math.ceil((new Date(dateStr) - new Date()) / 86400000)
+  // Compare date strings directly (no time component) to avoid UTC offset issues
+  const today = localDateStr()
+  const target = String(dateStr).split('T')[0]
+  const diffMs = new Date(target) - new Date(today)
+  return Math.round(diffMs / 86400000)
 }
 
 function fmtDate(d) {
@@ -21,10 +34,10 @@ function fmtDate(d) {
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function todayStr() { return new Date().toISOString().split('T')[0] }
+function todayStr() { return localDateStr() }
 function addDays(n) {
   const d = new Date(); d.setDate(d.getDate() + n)
-  return d.toISOString().split('T')[0]
+  return localDateStr(d)
 }
 
 const PAYMENT_LABELS = {
