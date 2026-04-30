@@ -5,7 +5,7 @@ import KPICard from '../components/KPICard'
 import StatusBadge from '../components/StatusBadge'
 import { analyticsAPI } from '../lib/api'
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
+  BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import { ShoppingCart, IndianRupee, Users, Clock } from 'lucide-react'
@@ -48,19 +48,13 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Revenue — Last 7 Days</h2>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={daily} margin={{top:20,right:60,left:10,bottom:10}}>
-              <defs>
-                <linearGradient id="rv" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1B4332" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#1B4332" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
+            <BarChart data={daily} margin={{top:20,right:30,left:10,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:12}} padding={{left:20,right:20}}/>
-              <YAxis tick={{fontSize:12}} tickFormatter={v=>`₹${v}`} width={72}/>
+              <XAxis dataKey="label" tick={{fontSize:12}} padding={{left:10,right:10}}/>
+              <YAxis tick={{fontSize:12}} tickFormatter={v=>`₹${v}`} width={72} allowDecimals={false}/>
               <Tooltip formatter={v=>[`₹${Number(v).toLocaleString()}`,'Revenue']}/>
-              <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv)" dot={false} isAnimationActive={false}/>
-            </AreaChart>
+              <Bar dataKey="revenue" fill="#1B4332" radius={[4,4,0,0]} maxBarSize={40} isAnimationActive={false}/>
+            </BarChart>
           </ResponsiveContainer>
         </div>
 

@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { analyticsAPI } from '../../lib/api'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 
 const COLORS = ['#1B4332','#D97706','#3f9a67','#6db38d','#eab842','#a0ccb3','#f5dea1','#ef4444']
@@ -128,59 +128,77 @@ export default function AnalyticsPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Avg order value line */}
+        {/* Avg order value — bar chart avoids line-clipping at edges */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Avg Order Value</h2>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={sales} margin={{top:20,right:60,left:10,bottom:10}}>
+            <BarChart data={sales} margin={{top:20,right:30,left:10,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:20,right:20}}/>
-              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={65}/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={65} allowDecimals={false}/>
               <Tooltip formatter={v=>[`₹${Number(v).toFixed(0)}`,'Avg Value']}/>
-              <Line type="monotone" dataKey="avg_order_value" stroke="#3f9a67" strokeWidth={2} dot={false} isAnimationActive={false}/>
-            </LineChart>
+              <Bar dataKey="avg_order_value" fill="#3f9a67" radius={[4,4,0,0]} maxBarSize={40} isAnimationActive={false}/>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-        {/* Category pie */}
+        {/* Category breakdown — pure HTML, no SVG clipping */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm xl:col-span-1">
           <h2 className="font-semibold text-gray-800 mb-4">Revenue by Category</h2>
           {categories.length === 0 ? (
             <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={categories} dataKey="revenue" nameKey="category" cx="50%" cy="50%"
-                  outerRadius={75} isAnimationActive={false}>
-                  {categories.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]}/>)}
-                </Pie>
-                <Tooltip formatter={v=>`₹${Number(v).toLocaleString()}`}/>
-                <Legend iconType="circle" iconSize={10} formatter={(v) => <span style={{fontSize:11,color:'#555'}}>{v}</span>}/>
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="space-y-3 mt-1">
+              {categories.map((c, i) => {
+                const total = categories.reduce((a,b) => a + Number(b.revenue), 0)
+                const pct = total > 0 ? (Number(c.revenue) / total * 100).toFixed(1) : '0.0'
+                return (
+                  <div key={c.category}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium text-gray-700 capitalize flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{backgroundColor: COLORS[i % COLORS.length]}}/>
+                        {c.category}
+                      </span>
+                      <span className="text-gray-500 text-xs">₹{Number(c.revenue).toLocaleString()} · {pct}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full transition-all" style={{width:`${pct}%`, backgroundColor: COLORS[i % COLORS.length]}}/>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
 
-        {/* Order status breakdown */}
+        {/* Order status — pure HTML bar list */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm xl:col-span-1">
           <h2 className="font-semibold text-gray-800 mb-4">Order Status</h2>
           {pieStatusData.length === 0 ? (
             <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={pieStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                  outerRadius={75} isAnimationActive={false}>
-                  {pieStatusData.map((r, i) => (
-                    <Cell key={i} fill={STATUS_COLORS[r.name] || COLORS[i % COLORS.length]}/>
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v,n)=>[v, n]}/>
-                <Legend iconType="circle" iconSize={10} formatter={(v) => <span style={{fontSize:11,color:'#555',textTransform:'capitalize'}}>{v}</span>}/>
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="space-y-3 mt-1">
+              {pieStatusData.map((r, i) => {
+                const pct = totalAll > 0 ? (r.value / totalAll * 100).toFixed(1) : '0.0'
+                const color = STATUS_COLORS[r.name] || COLORS[i % COLORS.length]
+                return (
+                  <div key={r.name}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium capitalize flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{backgroundColor: color}}/>
+                        {r.name.replace(/_/g,' ')}
+                      </span>
+                      <span className="text-gray-500 text-xs">{r.value} · {pct}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full transition-all" style={{width:`${pct}%`, backgroundColor: color}}/>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
 
