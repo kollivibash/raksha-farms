@@ -53,7 +53,7 @@ export async function getDashboard(req, res) {
 
     const needed = {}  // { product_id: { name, qty } }
     for (const sub of dueSubs) {
-      const items = Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]')
+      const items = (() => { try { return Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]') } catch { return [] } })()
       for (const item of items) {
         const key = item.id || item.name
         if (!key) continue
@@ -185,12 +185,13 @@ export async function generateOrders(req, res) {
       )
       if (existingDel.length > 0) continue  // already generated in a prior run — skip
 
-      const items = Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]')
-      const address = sub.address || sub.uaddress
-        ? (typeof (sub.address || sub.uaddress) === 'string'
-            ? JSON.parse(sub.address || sub.uaddress)
-            : (sub.address || sub.uaddress))
-        : {}
+      const items = (() => { try { return Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]') } catch { return [] } })()
+      const address = (() => {
+        const raw = sub.address || sub.uaddress
+        if (!raw) return {}
+        if (typeof raw !== 'string') return raw
+        try { return JSON.parse(raw) } catch { return {} }
+      })()
       const addr = {
         name:    sub.uname    || address.name    || '',
         phone:   sub.uphone   || address.phone   || '',

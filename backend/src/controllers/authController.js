@@ -51,6 +51,7 @@ export async function login(req, res) {
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
 
     if (user.role !== 'admin' && user.role !== 'user') return res.status(403).json({ error: 'Access denied' })
+    if (user.is_active === false) return res.status(403).json({ error: 'Your account has been suspended. Please contact support.' })
 
     const token = signToken(user)
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
@@ -117,6 +118,8 @@ export async function googleAuth(req, res) {
       )
       user = created[0]
     }
+
+    if (user.is_active === false) return res.status(403).json({ error: 'Your account has been suspended. Please contact support.' })
 
     const token = signToken(user)
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })

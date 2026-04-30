@@ -56,7 +56,7 @@ export default function CartPage() {
             const maxStock = product ? product.stock : item.quantity
             return (
               <CartItemRow
-                key={item.id}
+                key={item.cartKey || item.id}
                 item={item}
                 maxStock={maxStock}
                 onUpdateQty={(qty) => {
@@ -64,10 +64,10 @@ export default function CartPage() {
                     addToast(`Only ${maxStock} units available for ${item.name}`, 'warning')
                     return
                   }
-                  updateQuantity(item.id, qty)
+                  updateQuantity(item.cartKey || item.id, qty)
                 }}
                 onRemove={() => {
-                  removeFromCart(item.id)
+                  removeFromCart(item.cartKey || item.id)
                   addToast(`${item.name} removed from cart`, 'info')
                 }}
               />

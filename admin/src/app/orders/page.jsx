@@ -475,7 +475,7 @@ export default function OrdersPage() {
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
                           <select value={o.status} onChange={e => changeStatus(o.id, e.target.value)}
-                            disabled={o.status === 'rejected' || o.status === 'cancelled'}
+                            disabled={['rejected', 'cancelled', 'delivered'].includes(o.status)}
                             className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1B4332] bg-white disabled:opacity-50 disabled:cursor-not-allowed">
                             {STATUSES.map(s =>
                               <option key={s} value={s}>{STATUS_LABELS[s]}</option>

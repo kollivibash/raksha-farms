@@ -14,7 +14,7 @@ function getPrevRejectedIds(ord) {
 export async function createOrder(req, res) {
   const client = await pool.connect()
   try {
-    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId, subscription_plan_id } = req.body
+    const { customer, items, subtotal, deliveryFee, total, paymentMethod, deliverySlot, notes, referenceId, subscription_plan_id, coupon_code } = req.body
     if (!items?.length || !total) return res.status(400).json({ error: 'items and total are required' })
 
     await client.query('BEGIN')
@@ -121,23 +121,35 @@ export async function createOrder(req, res) {
     )
     const order = rows[0]
 
-    // ── Subscription creation ─────────────────────────────────────────────────
-    if (subscription_plan_id && userId) {
-      try {
-        const { rows: planRows } = await client.query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
-        const plan = planRows[0]
-        if (plan) {
-          const nextDelivery = new Date()
-          nextDelivery.setDate(nextDelivery.getDate() + (plan.frequency_days || 1))
-          await client.query(
-            `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, true)`,
-            [userId, plan.id, JSON.stringify(validatedItems), serverTotal, plan.frequency, nextDelivery.toISOString().split('T')[0]]
-          )
-        }
-      } catch(subErr) {
-        console.error('Subscription save error (non-fatal):', subErr.message)
+    // ── Subscription creation — fatal: if sub creation fails, roll back the whole order ──
+    if (subscription_plan_id) {
+      if (!userId) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'You must be logged in to create a subscription.' })
       }
+      const { rows: planRows } = await client.query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
+      const plan = planRows[0]
+      if (!plan) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Subscription plan not found.' })
+      }
+      const nextDelivery = new Date()
+      nextDelivery.setDate(nextDelivery.getDate() + (plan.frequency_days || 1))
+      await client.query(
+        `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)`,
+        [userId, plan.id, JSON.stringify(validatedItems), serverTotal, plan.frequency, nextDelivery.toISOString().split('T')[0]]
+      )
+    }
+
+    // ── Coupon: increment used_count atomically ───────────────────────────────
+    if (coupon_code) {
+      await client.query(
+        `UPDATE coupons SET used_count = used_count + 1
+         WHERE code = $1 AND is_active = true AND used_count < max_uses
+           AND (expires_at IS NULL OR expires_at > NOW())`,
+        [coupon_code.toUpperCase()]
+      ).catch(() => {})
     }
 
     await client.query('COMMIT')
@@ -202,6 +214,12 @@ export async function updateOrderStatus(req, res) {
     }
 
     const ord = existing[0]
+
+    // Bug 5: Delivered orders are final — block any further status change
+    if (ord.status === 'delivered') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Delivered orders cannot be changed.' })
+    }
 
     // Parse full items list
     const fullItems = (() => {
@@ -284,7 +302,8 @@ export async function updateOrderStatus(req, res) {
     )
 
     // ── FIX BUG 6: Cancel only restores items not already restored by rejection ─
-    if (status === 'cancelled' && ord.status !== 'rejected' && ord.status !== 'cancelled') {
+    // Also never restore stock for delivered orders (items were already given to the customer)
+    if (status === 'cancelled' && ord.status !== 'rejected' && ord.status !== 'cancelled' && ord.status !== 'delivered') {
       const updatedPrevRejectedIds = getPrevRejectedIds(ord) // use original ord (before this update)
       for (const item of fullItems) {
         if (!item.id) continue

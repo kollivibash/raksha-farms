@@ -63,12 +63,40 @@ export default function CheckoutPage() {
   // Step 3: payment — 'card' is disabled (coming soon), default to upi
   const [paymentMethod, setPaymentMethod] = useState('upi')
 
-  useEffect(() => { closeDrawer() }, [])
+  // Coupon state
+  const [couponCode, setCouponCode]       = useState('')
+  const [couponApplied, setCouponApplied] = useState(null)  // { discount, code, coupon }
+  const [couponError, setCouponError]     = useState('')
+  const [couponLoading, setCouponLoading] = useState(false)
 
+  useEffect(() => { closeDrawer() }, [])
 
   const activeSlot    = DELIVERY_SLOTS.find((s) => s.id === selectedSlot)
   const slotFee       = totalPrice >= FREE_DELIVERY_THRESHOLD ? 0 : (activeSlot?.fee ?? 30)
-  const finalTotal    = totalPrice + slotFee
+  // Bug 2: apply subscription plan discount to subtotal before adding delivery fee
+  const subscriptionDiscount = orderType === 'subscription' && selectedPlan?.discount_percent > 0
+    ? Math.round(totalPrice * selectedPlan.discount_percent / 100)
+    : 0
+  const couponDiscount = couponApplied ? couponApplied.discount : 0
+  const finalTotal    = Math.max(0, totalPrice - subscriptionDiscount - couponDiscount + slotFee)
+
+  async function applyCoupon() {
+    if (!couponCode.trim()) return
+    setCouponLoading(true); setCouponError('')
+    try {
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      const res = await fetch(`${BACKEND_URL}/api/coupons/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponCode.trim(), order_total: totalPrice }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); return }
+      setCouponApplied({ discount: data.discount, code: couponCode.trim().toUpperCase(), coupon: data.coupon })
+      addToast(`Coupon applied! You save ₹${data.discount}`, 'success')
+    } catch { setCouponError('Could not validate coupon') }
+    finally { setCouponLoading(false) }
+  }
 
   if (cart.length === 0) {
     return (
@@ -129,6 +157,17 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
+    // Bug 1: Subscription requires login + a selected plan
+    if (orderType === 'subscription') {
+      if (!user) {
+        addToast('Please log in to place a subscription order', 'error', 5000)
+        return
+      }
+      if (!selectedPlan) {
+        addToast('Please select a subscription plan to continue', 'error', 5000)
+        return
+      }
+    }
     // Stock validation before placing
     const outOfStock = cart.filter(item => item.stock === 0 || item.quantity > item.stock)
     if (outOfStock.length) {
@@ -177,7 +216,7 @@ export default function CheckoutPage() {
       const backendRes = await fetch(`${BACKEND_URL}/api/orders`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ customer, items, subtotal: totalPrice, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label, referenceId: orderId, subscription_plan_id: orderType === 'subscription' && selectedPlan ? selectedPlan.id : null }),
+        body: JSON.stringify({ customer, items, subtotal: totalPrice - subscriptionDiscount - couponDiscount, deliveryFee: slotFee, total: finalTotal, paymentMethod, deliverySlot: activeSlot?.label, referenceId: orderId, subscription_plan_id: orderType === 'subscription' && selectedPlan ? selectedPlan.id : null, coupon_code: couponApplied?.code || null }),
       })
       if (backendRes.ok) {
         const data = await backendRes.json()
@@ -595,10 +634,41 @@ export default function CheckoutPage() {
                 </div>
               ))}
             </div>
+            {/* Coupon input */}
+            <div className="border-t pt-3 mb-2">
+              {couponApplied ? (
+                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-sm">
+                  <span className="text-green-700 font-semibold">🎟 {couponApplied.code} — ₹{couponApplied.discount} off</span>
+                  <button onClick={() => { setCouponApplied(null); setCouponCode('') }} className="text-gray-400 hover:text-red-500 text-xs ml-2">✕</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input value={couponCode} onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError('') }}
+                    placeholder="Coupon code" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400 uppercase"/>
+                  <button onClick={applyCoupon} disabled={couponLoading || !couponCode.trim()}
+                    className="px-3 py-2 bg-forest-500 text-white rounded-xl text-xs font-semibold disabled:opacity-50 hover:bg-forest-600 transition">
+                    {couponLoading ? '…' : 'Apply'}
+                  </button>
+                </div>
+              )}
+              {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
+            </div>
             <div className="border-t pt-2 space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-500">
                 <span>Subtotal</span><span>₹{totalPrice}</span>
               </div>
+              {subscriptionDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Plan discount ({selectedPlan.discount_percent}%)</span>
+                  <span>−₹{subscriptionDiscount}</span>
+                </div>
+              )}
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Coupon ({couponApplied.code})</span>
+                  <span>−₹{couponDiscount}</span>
+                </div>
+              )}
               <div className="flex justify-between text-gray-500">
                 <span>Delivery</span>
                 <span className={slotFee === 0 ? 'text-forest-600 font-semibold' : ''}>

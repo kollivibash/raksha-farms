@@ -33,10 +33,13 @@ export function WishlistProvider({ children }) {
   // Start empty — load from DB, never from localStorage
   const [wishlist, setWishlist] = useState([])
   const saveTimer = useRef(null)
+  // Guard: don't save the initial [] to backend before the first DB load completes
+  const hasSyncedFromBackend = useRef(!getToken())  // guests are always "synced"
 
   // Sync from backend on mount and on login
   const syncFromBackend = useCallback(async () => {
     const items = await loadWishlistFromBackend()
+    hasSyncedFromBackend.current = true  // mark synced regardless of result
     if (Array.isArray(items)) setWishlist(items)
   }, [])
 
@@ -48,7 +51,8 @@ export function WishlistProvider({ children }) {
 
   // Debounced save to backend whenever wishlist changes
   useEffect(() => {
-    if (!getToken()) return         // don't save if not logged in
+    if (!getToken()) return
+    if (!hasSyncedFromBackend.current) return  // block save until first DB load done
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => saveWishlistToBackend(wishlist), 1500)
   }, [wishlist])
