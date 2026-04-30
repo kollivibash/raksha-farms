@@ -1,25 +1,43 @@
 import { query } from '../config/database.js'
 
 const DELIVERY_KEYS = ['free_delivery_threshold', 'delivery_fee_standard', 'delivery_fee_express']
+const DEFAULTS = { free_delivery_threshold: 500, delivery_fee_standard: 30, delivery_fee_express: 60 }
+
+// Ensure the table exists — safe to call multiple times
+async function ensureTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS store_settings (
+      key        VARCHAR(100) PRIMARY KEY,
+      value      TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `)
+  // Seed defaults
+  await query(`
+    INSERT INTO store_settings (key, value) VALUES
+      ('free_delivery_threshold', '500'),
+      ('delivery_fee_standard', '30'),
+      ('delivery_fee_express', '60')
+    ON CONFLICT (key) DO NOTHING
+  `)
+}
 
 export async function getDeliverySettings(req, res) {
   try {
+    await ensureTable()
     const { rows } = await query(
       `SELECT key, value FROM store_settings WHERE key = ANY($1)`,
       [DELIVERY_KEYS]
     )
-    const settings = {}
+    const settings = { ...DEFAULTS }
     for (const r of rows) settings[r.key] = parseFloat(r.value)
-    // Fill defaults if any missing
-    if (!settings.free_delivery_threshold) settings.free_delivery_threshold = 500
-    if (!settings.delivery_fee_standard)   settings.delivery_fee_standard   = 30
-    if (!settings.delivery_fee_express)    settings.delivery_fee_express     = 60
     res.json(settings)
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
 export async function updateDeliverySettings(req, res) {
   try {
+    await ensureTable()
     const { free_delivery_threshold, delivery_fee_standard, delivery_fee_express } = req.body
     const updates = [
       ['free_delivery_threshold', free_delivery_threshold],
