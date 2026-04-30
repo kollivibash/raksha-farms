@@ -122,8 +122,8 @@ export default function Navbar() {
 
               {/* Desktop nav links */}
               <div className="hidden md:flex items-center gap-6">
-                <NavLink to="/" active={location.pathname === '/'}>Shop</NavLink>
-                <a href="/#categories" className="text-sm font-semibold text-gray-600 hover:text-forest-500 transition-colors">Categories</a>
+                <NavLink to="/" active={location.pathname === '/' && location.hash !== '#categories'}>Shop</NavLink>
+                <NavLink to="/#categories" active={location.hash === '#categories'}>Categories</NavLink>
                 <NavLink to="/wishlist" active={location.pathname === '/wishlist'}>
                   Wishlist
                   {wishlist.length > 0 && (
