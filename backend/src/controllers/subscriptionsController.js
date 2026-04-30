@@ -169,6 +169,13 @@ export async function generateOrders(req, res) {
 
     const created = []
     for (const sub of dueSubs) {
+      // ── Bug 4: Idempotency guard — skip if we already generated for this date ──
+      const { rows: existingDel } = await client.query(
+        `SELECT id FROM subscription_deliveries WHERE subscription_id=$1 AND delivery_date=$2`,
+        [sub.id, targetDate]
+      )
+      if (existingDel.length > 0) continue  // already generated — skip silently
+
       const items = Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]')
       const address = sub.address || sub.uaddress
         ? (typeof (sub.address || sub.uaddress) === 'string'
@@ -183,22 +190,59 @@ export async function generateOrders(req, res) {
         notes:   `Subscription delivery (${sub.frequency})`,
       }
 
+      // ── Bug 3: Deduct stock atomically for each subscription item ─────────────
+      const validatedItems = []
+      let stockError = null
+      for (const item of items) {
+        if (!item.id) { validatedItems.push(item); continue }
+        // Lock the product row
+        const { rows: pRows } = await client.query(
+          'SELECT id, name, stock FROM products WHERE id=$1 FOR UPDATE',
+          [item.id]
+        )
+        const prod = pRows[0]
+        if (!prod) { validatedItems.push(item); continue }  // product deleted — skip gracefully
+
+        const qty = Number(item.quantity) || 1
+        if (prod.stock < qty) {
+          // Not enough stock — still create the order but log a warning; don't crash the batch
+          console.warn(`[generateOrders] Low stock for "${prod.name}": need ${qty}, have ${prod.stock}`)
+          validatedItems.push(item)
+          continue
+        }
+
+        const { rowCount } = await client.query(
+          `UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2 AND stock >= $1`,
+          [qty, item.id]
+        )
+        if (rowCount === 0) {
+          console.warn(`[generateOrders] Race: stock gone for "${prod.name}" — skipping deduction`)
+        } else {
+          await client.query(
+            `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'subscription_order')`,
+            [item.id, -qty]
+          ).catch(() => {})
+        }
+        validatedItems.push(item)
+      }
+
       // Create order
       const { rows: oRows } = await client.query(
         `INSERT INTO orders
            (user_id, items, subtotal, delivery_fee, total, status, payment_method, address, notes)
          VALUES ($1,$2,$3,0,$3,'placed','cod',$4,$5)
          RETURNING id, reference_id`,
-        [sub.user_id, JSON.stringify(items), sub.price_per_cycle,
+        [sub.user_id, JSON.stringify(validatedItems), sub.price_per_cycle,
          JSON.stringify(addr), `Subscription - ${sub.frequency}`]
       )
       const orderId = oRows[0].id
 
-      // Record delivery entry
+      // Record delivery entry (ON CONFLICT DO NOTHING as extra safety net)
       await client.query(
         `INSERT INTO subscription_deliveries
            (subscription_id, delivery_date, status, order_id, payment_status, payment_amount)
-         VALUES ($1,$2,'pending',$3,'cod_due',$4)`,
+         VALUES ($1,$2,'pending',$3,'cod_due',$4)
+         ON CONFLICT (subscription_id, delivery_date) DO NOTHING`,
         [sub.id, targetDate, orderId, sub.price_per_cycle]
       )
 
@@ -218,7 +262,7 @@ export async function generateOrders(req, res) {
         subscription_id: sub.id,
         order_id:        orderId,
         customer:        sub.uname,
-        items:           items.length,
+        items:           validatedItems.length,
         amount:          sub.price_per_cycle,
       })
     }

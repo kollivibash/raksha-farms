@@ -224,6 +224,13 @@ export async function initDb() {
     // Widen frequency column to support 'bi-weekly' etc
     await query(`ALTER TABLE subscriptions ALTER COLUMN frequency TYPE VARCHAR(30)`).catch(() => {})
 
+    // ── Bug 4 fix: UNIQUE guard so generateOrders is idempotent ──────────────
+    await query(`
+      ALTER TABLE subscription_deliveries
+        ADD CONSTRAINT IF NOT EXISTS uq_sub_delivery
+        UNIQUE (subscription_id, delivery_date)
+    `).catch(() => {})
+
     // Add reference_id column if it doesn't exist (stores the frontend RF-... order ID)
     await query(`
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference_id VARCHAR(60)

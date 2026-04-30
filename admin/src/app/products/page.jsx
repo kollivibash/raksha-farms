@@ -360,7 +360,11 @@ export default function ProductsPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => { setShowModal(false); handleHardDelete(editing) }}
+                  onClick={() => {
+                    const prod = products.find(p => p.id === editing) || { id: editing, name: 'this product' }
+                    setShowModal(false)
+                    handleHardDelete(prod)
+                  }}
                   className="w-full py-2 text-sm font-semibold text-red-600 border border-red-300 rounded-lg hover:bg-red-100 transition"
                 >
                   Permanently Delete This Product

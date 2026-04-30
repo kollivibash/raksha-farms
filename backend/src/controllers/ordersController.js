@@ -3,6 +3,14 @@ import pool from '../config/database.js'
 
 const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 
+// ── Helper: safely parse previously rejected items from order notes ─────────
+function getPrevRejectedIds(ord) {
+  try {
+    const p = typeof ord.notes === 'string' ? JSON.parse(ord.notes) : ord.notes
+    return new Set((p?.rejected_items || []).map(r => r.id).filter(Boolean))
+  } catch { return new Set() }
+}
+
 export async function createOrder(req, res) {
   const client = await pool.connect()
   try {
@@ -11,18 +19,21 @@ export async function createOrder(req, res) {
 
     await client.query('BEGIN')
 
-    // ── Server-side price + stock validation ──────────────────────────────────
-    const ids = items.map(i => i.id).filter(Boolean)
     let serverTotal = deliveryFee || 0
     const validatedItems = []
 
     for (const item of items) {
       if (!item.id) continue
+
+      // ── FIX BUG 1: Atomic stock check + deduct in one statement ──────────────
+      // SELECT FOR UPDATE locks the row so no concurrent transaction can read
+      // stale stock between our check and our update.
       const { rows: pRows } = await client.query(
-        'SELECT id, name, price, offer_price, stock, unit, is_active FROM products WHERE id=$1',
+        'SELECT id, name, price, offer_price, stock, unit, variants, is_active FROM products WHERE id=$1 FOR UPDATE',
         [item.id]
       )
       const prod = pRows[0]
+
       if (!prod) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: `Product "${item.name}" could not be found. Please remove it from your cart and try again.` })
@@ -31,28 +42,49 @@ export async function createOrder(req, res) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: `"${prod.name}" is no longer available. Please remove it from your cart and try again.` })
       }
-      if (prod.stock < item.quantity) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Insufficient stock for "${prod.name}". Only ${prod.stock} available.` })
-      }
-      // Use server price (offer_price takes precedence)
-      const serverPrice = prod.offer_price && Number(prod.offer_price) > 0
-        ? Number(prod.offer_price)
-        : Number(prod.price)
-      serverTotal += serverPrice * item.quantity
-      validatedItems.push({ ...item, price: serverPrice, unit: prod.unit })
-    }
 
-    // Deduct stock atomically for each item
-    for (const item of validatedItems) {
-      await client.query(
-        'UPDATE products SET stock = stock - $1, updated_at=NOW() WHERE id=$2',
+      // ── FIX BUG 2: Resolve variant price/unit before falling back to base ────
+      const variants = Array.isArray(prod.variants)
+        ? prod.variants
+        : (() => { try { return JSON.parse(prod.variants || '[]') } catch { return [] } })()
+
+      let serverPrice
+      let serverUnit = prod.unit
+
+      if (variants.length && item.unit) {
+        const variant = variants.find(v => v.label === item.unit)
+        if (variant) {
+          serverPrice = Number(variant.price)
+          serverUnit  = variant.label
+        }
+      }
+      // Fallback: base product price (offer_price takes precedence)
+      if (!serverPrice) {
+        serverPrice = prod.offer_price && Number(prod.offer_price) > 0
+          ? Number(prod.offer_price)
+          : Number(prod.price)
+      }
+
+      // ── FIX BUG 1 (continued): Atomic deduct with WHERE stock >= qty ─────────
+      // If stock was already taken by a concurrent order, rowCount === 0 → reject.
+      const { rowCount } = await client.query(
+        `UPDATE products
+         SET stock = stock - $1, updated_at = NOW()
+         WHERE id = $2 AND stock >= $1`,
         [item.quantity, item.id]
       )
+      if (rowCount === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Insufficient stock for "${prod.name}". Please reduce quantity and try again.` })
+      }
+
       await client.query(
         `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'order_placed')`,
         [item.id, -item.quantity]
       ).catch(() => {})
+
+      serverTotal += serverPrice * item.quantity
+      validatedItems.push({ ...item, price: serverPrice, unit: serverUnit })
     }
 
     // ── Build order ───────────────────────────────────────────────────────────
@@ -154,29 +186,36 @@ export async function getOrder(req, res) {
 }
 
 export async function updateOrderStatus(req, res) {
+  const client = await pool.connect()
   try {
     const { status, rejection_notes, rejected_items, delivery_time } = req.body
     if (!VALID_STATUSES.includes(status))
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` })
 
-    // Fetch current order
-    const { rows: existing } = await query('SELECT * FROM orders WHERE id=$1', [req.params.id])
-    if (!existing[0]) return res.status(404).json({ error: 'Order not found' })
+    await client.query('BEGIN')
+
+    // Lock the order row to prevent concurrent status updates
+    const { rows: existing } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id])
+    if (!existing[0]) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Order not found' })
+    }
 
     const ord = existing[0]
 
-    // Parse full items list (to look up prices for rejected items)
+    // Parse full items list
     const fullItems = (() => {
       try { return Array.isArray(ord.items) ? ord.items : JSON.parse(ord.items || '[]') }
       catch { return [] }
     })()
 
-    // --- Rejection logic ---
+    // ── FIX BUG 5: Only restore stock for items NOT previously rejected ────────
+    const prevRejectedIds = getPrevRejectedIds(ord)
+
     let notesPayload = rejection_notes || ord.notes || ''
-    let newTotal = null // only set when rejection changes the total
+    let newTotal = null
 
     if (rejected_items?.length) {
-      // Enrich rejected_items with price from stored order items
       const enriched = rejected_items.map(ri => {
         const found = fullItems.find(fi => fi.id === ri.id || fi.name === ri.name)
         return {
@@ -189,13 +228,11 @@ export async function updateOrderStatus(req, res) {
         }
       })
 
-      // Calculate how much was rejected
       const rejectedAmount = enriched.reduce((sum, ri) => sum + (ri.price * ri.quantity), 0)
       const originalTotal  = Number(ord.total)
       const deliveryFee    = Number(ord.delivery_fee || 0)
       const allRejected    = enriched.length >= fullItems.length
 
-      // New total = original minus rejected items cost; if all rejected → 0
       const adjustedTotal = allRejected
         ? 0
         : Math.max(deliveryFee, originalTotal - rejectedAmount)
@@ -203,12 +240,25 @@ export async function updateOrderStatus(req, res) {
       newTotal = adjustedTotal
 
       notesPayload = JSON.stringify({
-        remarks:        rejection_notes || '',
-        rejected_items: enriched,
-        original_total: originalTotal,
+        remarks:         rejection_notes || '',
+        rejected_items:  enriched,
+        original_total:  originalTotal,
         rejected_amount: rejectedAmount,
-        adjusted_total: adjustedTotal,
+        adjusted_total:  adjustedTotal,
       })
+
+      // Restore stock only for items not already restored in a previous rejection
+      for (const item of enriched) {
+        if (!item.id || prevRejectedIds.has(item.id)) continue   // already restored — skip
+        await client.query(
+          `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
+          [item.quantity || 1, item.id]
+        ).catch(() => {})
+        await client.query(
+          `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'rejection_restore')`,
+          [item.id, item.quantity || 1]
+        ).catch(() => {})
+      }
     }
 
     const updateFields = ['status=$1', 'updated_at=NOW()']
@@ -228,57 +278,49 @@ export async function updateOrderStatus(req, res) {
     }
     updateParams.push(req.params.id)
 
-    const { rows } = await query(
+    const { rows } = await client.query(
       `UPDATE orders SET ${updateFields.join(', ')} WHERE id=$${updateParams.length} RETURNING *`,
       updateParams
     )
 
-    // Restore stock for rejected items (they were deducted at order-placement time)
-    if (rejected_items?.length) {
-      for (const item of rejected_items) {
-        await query(
-          `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
-          [item.quantity || 1, item.id]
-        ).catch(() => {})
-        await query(
-          `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'rejection_restore')`,
-          [item.id, item.quantity || 1]
-        ).catch(() => {})
-      }
-    }
-
-    // Restore ALL items if order fully cancelled (and wasn't already rejected)
+    // ── FIX BUG 6: Cancel only restores items not already restored by rejection ─
     if (status === 'cancelled' && ord.status !== 'rejected' && ord.status !== 'cancelled') {
+      const updatedPrevRejectedIds = getPrevRejectedIds(ord) // use original ord (before this update)
       for (const item of fullItems) {
         if (!item.id) continue
-        await query(
+        if (updatedPrevRejectedIds.has(item.id)) continue  // already restored at rejection time
+        await client.query(
           `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
           [item.quantity || 1, item.id]
         ).catch(() => {})
-        await query(
+        await client.query(
           `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'cancellation_restore')`,
           [item.id, item.quantity || 1]
         ).catch(() => {})
       }
     }
 
+    await client.query('COMMIT')
     res.json(rows[0])
-  } catch (err) { res.status(500).json({ error: err.message }) }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 }
 
-// Authenticated: return all orders for the logged-in user (by user_id in DB)
+// Authenticated: return all orders for the logged-in user
 export async function getMyOrders(req, res) {
   try {
-    // First: auto-link any unlinked orders that match this user's email (case-insensitive)
     await query(
       `UPDATE orders SET user_id=$1
        WHERE user_id IS NULL
          AND (address->>'email' ILIKE $2 OR notes ILIKE $3)
          AND address->>'email' != ''`,
       [req.user.id, req.user.email, `%${req.user.email}%`]
-    ).catch(() => {}) // non-fatal
+    ).catch(() => {})
 
-    // Fetch all orders by user_id OR by email match in address JSON (handles old unlinked orders)
     const { rows } = await query(
       `SELECT id, reference_id, status, total, delivery_fee, payment_method,
               items, address, notes, created_at, updated_at
@@ -292,8 +334,6 @@ export async function getMyOrders(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// Public: return all orders matching a phone number (last 90 days) — full data for proper restore
-// No auth needed — phone number acts as the identifier for guest/user orders
 export async function getOrdersByPhone(req, res) {
   try {
     const phone = req.params.phone.replace(/\D/g, '').slice(-10)
@@ -312,7 +352,6 @@ export async function getOrdersByPhone(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// User-facing status poll by DB UUID — no admin needed
 export async function trackOrder(req, res) {
   try {
     const { rows } = await query(
@@ -327,7 +366,6 @@ export async function trackOrder(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
 
-// User-facing status poll by frontend reference ID (RF-dd-mm-yyyy-...) — no auth needed
 export async function trackOrderByRef(req, res) {
   try {
     const { rows } = await query(

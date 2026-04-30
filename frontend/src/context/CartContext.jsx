@@ -39,10 +39,15 @@ export function CartProvider({ children }) {
   })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const saveTimer = useRef(null)
+  // ── Bug 7 fix: never let an empty initial state overwrite the real backend cart ─
+  // hasSyncedFromBackend becomes true after the first successful DB load.
+  // The debounced save is blocked until then so an empty [] never clobbers real data.
+  const hasSyncedFromBackend = useRef(!getToken())  // guests are always "synced"
 
   // Persist to localStorage (guest fallback) and debounce backend save
   useEffect(() => {
     localStorage.setItem('rf_cart', JSON.stringify(cart))
+    if (!hasSyncedFromBackend.current) return  // DB not yet loaded — don't overwrite it
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => saveCartToBackend(cart), 2000)
   }, [cart])
@@ -56,6 +61,8 @@ export function CartProvider({ children }) {
   // Merge backend cart into local state
   async function mergeBackendCart() {
     const backendItems = await loadCartFromBackend()
+    // Mark as synced regardless of result so saves can proceed after this point
+    hasSyncedFromBackend.current = true
     if (!Array.isArray(backendItems)) return
     setCart(prev => {
       if (!backendItems.length) return prev  // backend empty — keep local guest items
