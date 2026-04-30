@@ -156,7 +156,7 @@ export function OrdersProvider({ children }) {
   }, [syncOrdersByUser])
 
   return (
-    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone, syncOrdersByUser }}>
+    <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone, syncOrdersByUser, applyBackendOrders }}>
       {children}
     </OrdersContext.Provider>
   )

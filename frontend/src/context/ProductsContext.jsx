@@ -7,45 +7,51 @@ const API_URL = `${BACKEND_URL}/api/products`
 const ProductsContext = createContext(null)
 
 export function ProductsProvider({ children }) {
-  const [products, setProducts] = useState(INITIAL_PRODUCTS)
+  // ── Fix: start with empty list — never show stale static data ─────────────────
+  // INITIAL_PRODUCTS is only used as an offline fallback when the API is unreachable.
+  // If the admin has removed all products we must show an empty list, not fake ones.
+  const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch from backend on mount, fall back to static data if API is down
+  // Fetch from backend on mount. Fall back to static data ONLY if the network fails.
   useEffect(() => {
     fetch(`${API_URL}?limit=200`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('API error')
+        return r.json()
+      })
       .then(data => {
-        const apiProducts = data.products || []
-        if (apiProducts.length > 0) {
-          // Normalize API products to match frontend shape
-          const normalized = apiProducts.map(p => ({
-            id:          p.id,
-            name:        p.name,
-            category:    p.category,
-            description: p.description || '',
-            price:       Number(p.price),
-            offer_price: p.offer_price ? Number(p.offer_price) : null,
-            unit:        p.unit || 'kg',
-            stock:       Number(p.stock),
-            image:       p.image_url
-              ? (p.image_url.startsWith('http')
+        // Always replace state with whatever the DB returned — including an empty array.
+        // An empty array means the admin removed all products; respect that.
+        const apiProducts = Array.isArray(data.products) ? data.products : []
+        const normalized = apiProducts.map(p => ({
+          id:          p.id,
+          name:        p.name,
+          category:    p.category,
+          description: p.description || '',
+          price:       Number(p.price),
+          offer_price: p.offer_price ? Number(p.offer_price) : null,
+          unit:        p.unit || 'kg',
+          stock:       Number(p.stock),
+          image:       p.image_url
+            ? (p.image_url.startsWith('http')
+                ? p.image_url
+                : p.image_url.startsWith('/images/')
                   ? p.image_url
-                  : p.image_url.startsWith('/images/')
-                    ? p.image_url
-                    : `${BACKEND_URL}${p.image_url}`)
-              : null,
-            featured:    p.is_featured || false,
-            organic:     true,
-            rating:      4.7,
-            reviews:     42,
-            variants:    Array.isArray(p.variants) ? p.variants : [],
-          }))
-          // Use ONLY DB products — don't mix unmanageable static data in production
-          setProducts(normalized)
-        }
+                  : `${BACKEND_URL}${p.image_url}`)
+            : null,
+          featured:    p.is_featured || false,
+          organic:     true,
+          rating:      4.7,
+          reviews:     42,
+          variants:    Array.isArray(p.variants) ? p.variants : [],
+        }))
+        setProducts(normalized)
       })
       .catch(() => {
-        // Backend offline — use static data silently
+        // Backend unreachable (offline / deploy down) — fall back to bundled static data
+        // so the app stays usable offline. This is the ONLY place static data is used.
+        setProducts(INITIAL_PRODUCTS)
       })
       .finally(() => setLoading(false))
   }, [])

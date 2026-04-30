@@ -1,6 +1,39 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useOrders } from '../context/OrdersContext'
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+// Normalise a raw backend order row into the same shape the UI expects
+function normaliseBackendOrder(b) {
+  const addr = (() => {
+    try { return typeof b.address === 'string' ? JSON.parse(b.address) : (b.address || {}) }
+    catch { return {} }
+  })()
+  const parsedItems = (() => {
+    try { return Array.isArray(b.items) ? b.items : JSON.parse(b.items || '[]') }
+    catch { return [] }
+  })()
+  const STATUS_MAP = {
+    placed: 'pending', accepted: 'accepted', preparing: 'accepted',
+    out_for_delivery: 'out_for_delivery', delivered: 'delivered',
+    cancelled: 'rejected', rejected: 'rejected',
+  }
+  return {
+    orderId:       b.reference_id || b.id,
+    backendId:     b.id,
+    status:        STATUS_MAP[b.status] || b.status,
+    total:         Number(b.total),
+    deliveryFee:   Number(b.delivery_fee || 0),
+    subtotal:      Number(b.subtotal || 0),
+    items:         parsedItems,
+    customer:      addr,
+    paymentMethod: b.payment_method,
+    notes:         b.notes || null,
+    createdAt:     b.created_at,
+    updatedAt:     b.updated_at || b.created_at,
+  }
+}
 
 const STATUS_FLOW = [
   { key: 'pending',          label: 'Order Placed',      icon: '📋', desc: 'Your order has been received' },
@@ -30,23 +63,101 @@ function parseRejectionInfo(notes) {
 
 export default function OrderTrackingPage() {
   const { orderId } = useParams()
-  const { orders, syncOrdersByUser, syncOrdersByPhone } = useOrders()
-  const order = orders.find((o) => o.orderId === orderId)
-  const [syncing, setSyncing] = useState(false)
+  const { orders, syncOrdersByUser, syncOrdersByPhone, applyBackendOrders } = useOrders()
+  const [syncing, setSyncing]         = useState(false)
+  // initialLoad is true until the first sync attempt completes — prevents flash of "not found"
+  const [initialLoad, setInitialLoad] = useState(true)
+  // backendOrder is set when the order isn't in local cache but was fetched directly from API
+  const [backendOrder, setBackendOrder] = useState(null)
+  const fetchedRef = useRef(false)
 
-  // Sync on mount + every 30s — user_id first, phone fallback
+  // Derive order: prefer local cache (has richer merged data), fall back to direct fetch
+  const order = orders.find((o) => o.orderId === orderId || o.backendId === orderId) || backendOrder
+
+  // Fetch the order directly from the backend when it's not in local state.
+  // Handles: fresh browser, new device, shared tracking link, cleared cache.
+  async function fetchFromBackend() {
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+    try {
+      const token = localStorage.getItem('auth_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
+      // Try reference_id route first (RF-... style IDs)
+      let res = await fetch(`${BACKEND_URL}/api/orders/track-ref/${encodeURIComponent(orderId)}`, { headers })
+      if (!res.ok) {
+        // Try UUID route (backend DB id)
+        res = await fetch(`${BACKEND_URL}/api/orders/track/${encodeURIComponent(orderId)}`, { headers })
+      }
+      if (!res.ok) return  // genuinely not found
+
+      const minimal = await res.json()  // { id, status, updatedAt }
+      // Now fetch the full order so we can show items, customer info, totals
+      if (token && minimal.id) {
+        // Logged-in: mine endpoint has the full row
+        const mineRes = await fetch(`${BACKEND_URL}/api/orders/mine`, { headers })
+        if (mineRes.ok) {
+          const all = await mineRes.json()
+          const match = all.find(b => b.id === minimal.id || b.reference_id === orderId)
+          if (match) {
+            const normalised = normaliseBackendOrder(match)
+            setBackendOrder(normalised)
+            applyBackendOrders([match])  // merge into context so 30s polling works
+            return
+          }
+        }
+      }
+      // Guest or mine fetch failed — try by-phone if we have the phone from URL or localStorage
+      // As last resort, set a minimal skeleton so at least the status is shown
+      setBackendOrder({
+        orderId,
+        backendId: minimal.id,
+        status:    { placed:'pending', accepted:'accepted', preparing:'accepted',
+                     out_for_delivery:'out_for_delivery', delivered:'delivered',
+                     cancelled:'rejected', rejected:'rejected' }[minimal.status] || minimal.status,
+        total: 0, deliveryFee: 0, subtotal: 0,
+        items: [], customer: {}, paymentMethod: '', notes: null,
+        createdAt: minimal.updatedAt, updatedAt: minimal.updatedAt,
+        _partial: true,  // flag for the UI to show a limited view
+      })
+    } catch { /* silent — will show "not found" */ }
+  }
+
+  // On mount: sync from DB, then fall back to direct fetch if still missing
   useEffect(() => {
     async function sync() {
       setSyncing(true)
       await syncOrdersByUser()
-      const phone = order?.customer?.phone
-      if (phone) await syncOrdersByPhone(phone)
       setSyncing(false)
+      setInitialLoad(false)
     }
     sync()
-    const interval = setInterval(sync, 30_000)
+    const interval = setInterval(async () => {
+      setSyncing(true)
+      await syncOrdersByUser()
+      if (order?.customer?.phone) await syncOrdersByPhone(order.customer.phone)
+      setSyncing(false)
+    }, 30_000)
     return () => clearInterval(interval)
   }, []) // eslint-disable-line
+
+  // After initial sync: if order still not found, try fetching directly from backend
+  useEffect(() => {
+    if (!initialLoad && !order) fetchFromBackend()
+  }, [initialLoad]) // eslint-disable-line
+
+  // Loading state — shown only during initial sync to avoid flash of "not found"
+  if (initialLoad) {
+    return (
+      <div className="page-enter min-h-[50vh] flex flex-col items-center justify-center text-center px-4">
+        <svg className="animate-spin w-8 h-8 text-forest-500 mb-4" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p className="text-gray-400 text-sm">Loading your order…</p>
+      </div>
+    )
+  }
 
   if (!order) {
     return (
@@ -55,6 +166,46 @@ export default function OrderTrackingPage() {
         <h2 className="text-xl font-bold text-gray-700 mb-2">Order not found</h2>
         <p className="text-gray-400 mb-5">Check your order ID or visit My Orders</p>
         <Link to="/my-orders" className="btn-primary">My Orders</Link>
+      </div>
+    )
+  }
+
+  // Partial view — we have status but couldn't fetch full order details (guest + no cache)
+  if (order._partial) {
+    const currentStep = STATUS_INDEX[order.status] ?? 0
+    const isRejected  = order.status === 'rejected'
+    return (
+      <div className="page-enter max-w-2xl mx-auto px-4 sm:px-6 py-8 pb-24 md:pb-8">
+        <div className="mb-6">
+          <Link to="/my-orders" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-forest-500 transition-colors mb-4">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to My Orders
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-800">Track Order</h1>
+          <p className="text-gray-400 text-sm mt-0.5">Order #{String(orderId).slice(-12)}</p>
+        </div>
+        {isRejected ? (
+          <div className="card p-6 mb-5 text-center bg-red-50 border border-red-200">
+            <p className="text-4xl mb-3">❌</p>
+            <h2 className="font-bold text-red-700 text-lg">Order Rejected</h2>
+            <p className="text-red-400 text-sm mt-2">This order could not be fulfilled.</p>
+            <a href="tel:+919346566945" className="btn-primary mt-4 inline-flex bg-red-500 hover:bg-red-600">Call Support</a>
+          </div>
+        ) : (
+          <div className="card p-6 mb-5 text-center">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-forest-500 flex items-center justify-center text-3xl shadow-forest mb-3">
+              {STATUS_FLOW[currentStep]?.icon}
+            </div>
+            <h2 className="font-bold text-gray-800 text-xl">{STATUS_FLOW[currentStep]?.label}</h2>
+            <p className="text-gray-400 text-sm mt-1">{STATUS_FLOW[currentStep]?.desc}</p>
+          </div>
+        )}
+        <div className="card p-4 text-center text-sm text-gray-500">
+          <p>Log in to see full order details</p>
+          <Link to="/login" className="btn-primary mt-3 inline-flex text-xs">Sign In</Link>
+        </div>
       </div>
     )
   }
