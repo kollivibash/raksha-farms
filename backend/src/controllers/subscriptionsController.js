@@ -142,6 +142,12 @@ export async function generateOrders(req, res) {
   try {
     const targetDate = req.body.date || new Date().toISOString().split('T')[0]
 
+    // ── Fix 1: Open the transaction BEFORE fetching subscriptions and use
+    //    SELECT … FOR UPDATE to lock each subscription row.  This means a second
+    //    concurrent admin request will block on the locks until the first commits,
+    //    so the idempotency check inside the loop is always authoritative.
+    await client.query('BEGIN')
+
     const { rows: dueSubs } = await client.query(`
       SELECT s.*,
         u.name  AS uname,
@@ -159,22 +165,25 @@ export async function generateOrders(req, res) {
       LEFT JOIN users u               ON s.user_id = u.id
       LEFT JOIN subscription_plans sp ON s.plan_id  = sp.id
       WHERE s.is_active = true AND s.next_delivery = $1
+      FOR UPDATE OF s
     `, [targetDate])
 
     if (!dueSubs.length) {
-      return res.json({ generated: 0, orders: [], message: 'No subscriptions due on this date' })
+      await client.query('ROLLBACK')
+      return res.json({ generated: 0, skipped: 0, orders: [], failed: [], message: 'No subscriptions due on this date' })
     }
 
-    await client.query('BEGIN')
-
     const created = []
+    const failed  = []
+
     for (const sub of dueSubs) {
-      // ── Bug 4: Idempotency guard — skip if we already generated for this date ──
+      // Idempotency guard — locked rows mean we can't race here anymore, but the
+      // UNIQUE constraint on subscription_deliveries is a DB-level safety net too.
       const { rows: existingDel } = await client.query(
         `SELECT id FROM subscription_deliveries WHERE subscription_id=$1 AND delivery_date=$2`,
         [sub.id, targetDate]
       )
-      if (existingDel.length > 0) continue  // already generated — skip silently
+      if (existingDel.length > 0) continue  // already generated in a prior run — skip
 
       const items = Array.isArray(sub.items) ? sub.items : JSON.parse(sub.items || '[]')
       const address = sub.address || sub.uaddress
@@ -190,40 +199,70 @@ export async function generateOrders(req, res) {
         notes:   `Subscription delivery (${sub.frequency})`,
       }
 
-      // ── Bug 3: Deduct stock atomically for each subscription item ─────────────
+      // ── Fix 2: Strict stock check — skip the whole subscription if any item is
+      //    short. Don't create orders the farm cannot fulfil. Collect failures and
+      //    return them to the admin so they can restock and retry.
+      const stockFailures = []
       const validatedItems = []
-      let stockError = null
+
       for (const item of items) {
         if (!item.id) { validatedItems.push(item); continue }
-        // Lock the product row
+
+        // Lock the product row so concurrent order placement can't race us
         const { rows: pRows } = await client.query(
           'SELECT id, name, stock FROM products WHERE id=$1 FOR UPDATE',
           [item.id]
         )
         const prod = pRows[0]
-        if (!prod) { validatedItems.push(item); continue }  // product deleted — skip gracefully
+        if (!prod) { validatedItems.push(item); continue }  // product removed — skip gracefully
 
         const qty = Number(item.quantity) || 1
         if (prod.stock < qty) {
-          // Not enough stock — still create the order but log a warning; don't crash the batch
-          console.warn(`[generateOrders] Low stock for "${prod.name}": need ${qty}, have ${prod.stock}`)
-          validatedItems.push(item)
-          continue
+          stockFailures.push({ name: prod.name, need: qty, have: prod.stock })
+          continue  // do NOT push to validatedItems — we will skip this subscription
         }
 
+        // Atomic deduct — rowCount 0 means a concurrent request just took the last stock
         const { rowCount } = await client.query(
           `UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2 AND stock >= $1`,
           [qty, item.id]
         )
         if (rowCount === 0) {
-          console.warn(`[generateOrders] Race: stock gone for "${prod.name}" — skipping deduction`)
-        } else {
+          stockFailures.push({ name: prod.name, need: qty, have: 0 })
+          continue
+        }
+
+        await client.query(
+          `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'subscription_order')`,
+          [item.id, -qty]
+        ).catch(() => {})
+
+        validatedItems.push(item)
+      }
+
+      // If any item couldn't be stocked, skip this subscription entirely.
+      // Roll back the stock deductions we just made for this sub's items.
+      if (stockFailures.length > 0) {
+        // Restore stock that was deducted for the items we did process before hitting the failure
+        for (const item of validatedItems) {
+          if (!item.id) continue
+          const qty = Number(item.quantity) || 1
           await client.query(
-            `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'subscription_order')`,
-            [item.id, -qty]
+            `UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
+            [qty, item.id]
+          ).catch(() => {})
+          await client.query(
+            `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'subscription_stock_restore')`,
+            [item.id, qty]
           ).catch(() => {})
         }
-        validatedItems.push(item)
+        failed.push({
+          subscription_id: sub.id,
+          customer:        sub.uname,
+          reason:          'Insufficient stock',
+          items:           stockFailures,
+        })
+        continue  // move to next subscription — do not create an order
       }
 
       // Create order
@@ -237,7 +276,7 @@ export async function generateOrders(req, res) {
       )
       const orderId = oRows[0].id
 
-      // Record delivery entry (ON CONFLICT DO NOTHING as extra safety net)
+      // Record delivery entry (ON CONFLICT DO NOTHING as extra DB-level safety net)
       await client.query(
         `INSERT INTO subscription_deliveries
            (subscription_id, delivery_date, status, order_id, payment_status, payment_amount)
@@ -268,7 +307,14 @@ export async function generateOrders(req, res) {
     }
 
     await client.query('COMMIT')
-    res.json({ generated: created.length, date: targetDate, orders: created })
+    res.json({
+      generated: created.length,
+      skipped:   failed.length,
+      date:      targetDate,
+      orders:    created,
+      // failed array lets the admin see exactly which subscriptions need restocking
+      failed:    failed.length > 0 ? failed : undefined,
+    })
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     res.status(500).json({ error: err.message })
@@ -338,28 +384,57 @@ export async function getMySubscriptions(req, res) {
 
 // ── Admin: mark delivered — COD collected, payment auto-set to paid ────────────
 export async function markDelivered(req, res) {
+  const client = await pool.connect()
   try {
-    const { rows: sub } = await query(
+    await client.query('BEGIN')
+
+    // Lock the subscription row so concurrent clicks queue up rather than both running
+    const { rows: sub } = await client.query(
       `SELECT s.*, sp.frequency_days FROM subscriptions s
-       LEFT JOIN subscription_plans sp ON s.plan_id=sp.id WHERE s.id=$1`, [req.params.id]
+       LEFT JOIN subscription_plans sp ON s.plan_id=sp.id
+       WHERE s.id=$1 FOR UPDATE OF s`,
+      [req.params.id]
     )
-    if (!sub[0]) return res.status(404).json({ error: 'Subscription not found' })
-    const days = sub[0].frequency_days || 1
+    if (!sub[0]) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Subscription not found' })
+    }
+
+    const s    = sub[0]
+    const days = s.frequency_days || 1
     const today = new Date().toISOString().split('T')[0]
-    const deliveryDate = sub[0].next_delivery
-      ? String(sub[0].next_delivery).split('T')[0]
+    const deliveryDate = s.next_delivery
+      ? String(s.next_delivery).split('T')[0]
       : today
 
+    // ── Fix 3: Idempotency — if a 'delivered' record already exists for this
+    //    delivery date the cycle was already marked delivered (double-click or
+    //    retry). Return the current subscription state without mutating anything.
+    const { rows: existing } = await client.query(
+      `SELECT id FROM subscription_deliveries
+       WHERE subscription_id=$1 AND delivery_date=$2 AND status='delivered'`,
+      [req.params.id, deliveryDate]
+    )
+    if (existing.length > 0) {
+      await client.query('ROLLBACK')
+      // Re-fetch without lock to return current state
+      const { rows: cur } = await client.query(
+        `SELECT s.* FROM subscriptions s WHERE s.id=$1`, [req.params.id]
+      )
+      return res.json({ ...cur[0], _idempotent: true })
+    }
+
     // Record delivery: COD is collected at the door → payment_status = paid
-    await query(
+    await client.query(
       `INSERT INTO subscription_deliveries
          (subscription_id, delivery_date, status, payment_status, payment_amount)
-       VALUES ($1,$2,'delivered','paid',$3)`,
-      [req.params.id, deliveryDate, sub[0].price_per_cycle]
-    ).catch(() => {})
+       VALUES ($1,$2,'delivered','paid',$3)
+       ON CONFLICT (subscription_id, delivery_date) DO NOTHING`,
+      [req.params.id, deliveryDate, s.price_per_cycle]
+    )
 
     // Advance next_delivery, increment delivery_count, mark this cycle paid
-    const { rows } = await query(
+    const { rows } = await client.query(
       `UPDATE subscriptions
        SET delivery_count  = delivery_count + 1,
            next_delivery   = COALESCE(next_delivery, CURRENT_DATE) + ($1 || ' days')::interval,
@@ -368,28 +443,62 @@ export async function markDelivered(req, res) {
        WHERE id=$2 RETURNING *`,
       [days, req.params.id]
     )
+
+    await client.query('COMMIT')
     res.json(rows[0])
-  } catch (err) { res.status(500).json({ error: err.message }) }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 }
 
 // ── Admin: skip next delivery ─────────────────────────────────────────────────
 export async function skipDelivery(req, res) {
+  const client = await pool.connect()
   try {
-    const { rows: sub } = await query(
+    await client.query('BEGIN')
+
+    // Lock the row — same idempotency pattern as markDelivered
+    const { rows: sub } = await client.query(
       `SELECT s.*, sp.frequency_days FROM subscriptions s
-       LEFT JOIN subscription_plans sp ON s.plan_id=sp.id WHERE s.id=$1`, [req.params.id]
+       LEFT JOIN subscription_plans sp ON s.plan_id=sp.id
+       WHERE s.id=$1 FOR UPDATE OF s`,
+      [req.params.id]
     )
-    if (!sub[0]) return res.status(404).json({ error: 'Subscription not found' })
-    const days = sub[0].frequency_days || 1
+    if (!sub[0]) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Subscription not found' })
+    }
+
+    const s    = sub[0]
+    const days = s.frequency_days || 1
     const today = new Date().toISOString().split('T')[0]
+    const skipDate = s.next_delivery ? String(s.next_delivery).split('T')[0] : today
 
-    await query(
+    // Idempotency: already skipped this date → return current state
+    const { rows: existing } = await client.query(
+      `SELECT id FROM subscription_deliveries
+       WHERE subscription_id=$1 AND delivery_date=$2 AND status='skipped'`,
+      [req.params.id, skipDate]
+    )
+    if (existing.length > 0) {
+      await client.query('ROLLBACK')
+      const { rows: cur } = await client.query(
+        `SELECT s.* FROM subscriptions s WHERE s.id=$1`, [req.params.id]
+      )
+      return res.json({ ...cur[0], _idempotent: true })
+    }
+
+    await client.query(
       `INSERT INTO subscription_deliveries (subscription_id, delivery_date, status, payment_status, payment_amount)
-       VALUES ($1,$2,'skipped','pending',0)`,
-      [req.params.id, sub[0].next_delivery || today]
-    ).catch(() => {})
+       VALUES ($1,$2,'skipped','pending',0)
+       ON CONFLICT (subscription_id, delivery_date) DO NOTHING`,
+      [req.params.id, skipDate]
+    )
 
-    const { rows } = await query(
+    const { rows } = await client.query(
       `UPDATE subscriptions
        SET skipped_count = skipped_count + 1,
            next_delivery = COALESCE(next_delivery, CURRENT_DATE) + ($1 || ' days')::interval,
@@ -397,8 +506,15 @@ export async function skipDelivery(req, res) {
        WHERE id=$2 RETURNING *`,
       [days, req.params.id]
     )
+
+    await client.query('COMMIT')
     res.json(rows[0])
-  } catch (err) { res.status(500).json({ error: err.message }) }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 }
 
 // ── Customer: pause or resume own subscription ─────────────────────────────────
