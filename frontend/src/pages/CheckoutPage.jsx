@@ -72,7 +72,7 @@ export default function CheckoutPage() {
   useEffect(() => { closeDrawer() }, [])
 
   const activeSlot    = DELIVERY_SLOTS.find((s) => s.id === selectedSlot)
-  const slotFee       = totalPrice >= FREE_DELIVERY_THRESHOLD ? 0 : (activeSlot?.fee ?? 30)
+  const slotFee       = calcDelivery(totalPrice, activeSlot?.id)
   // Bug 2: apply subscription plan discount to subtotal before adding delivery fee
   const subscriptionDiscount = orderType === 'subscription' && selectedPlan?.discount_percent > 0
     ? Math.round(totalPrice * selectedPlan.discount_percent / 100)

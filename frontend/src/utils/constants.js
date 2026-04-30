@@ -45,7 +45,7 @@ export const DELIVERY_SLOTS = [
     label: 'Morning Delivery',
     desc: '7 AM – 10 AM',
     icon: '🌅',
-    fee: 0,
+    fee: DELIVERY_FEE_STANDARD,
     available: () => true,
   },
   {
@@ -53,7 +53,7 @@ export const DELIVERY_SLOTS = [
     label: 'Evening Delivery',
     desc: '5 PM – 8 PM',
     icon: '🌆',
-    fee: 0,
+    fee: DELIVERY_FEE_STANDARD,
     available: () => true,
   },
 ]
