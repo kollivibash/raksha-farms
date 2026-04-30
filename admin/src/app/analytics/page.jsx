@@ -95,8 +95,8 @@ export default function AnalyticsPage() {
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-6">
         <h2 className="font-semibold text-gray-800 mb-4">Revenue Over Time</h2>
         {loading ? <div className="h-64 flex items-center justify-center text-gray-400">Loading…</div> : (
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={sales} margin={{top:5,right:20,left:10,bottom:5}}>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={sales} margin={{top:20,right:40,left:10,bottom:10}}>
               <defs>
                 <linearGradient id="rv2" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#1B4332" stopOpacity={0.15}/>
@@ -104,10 +104,10 @@ export default function AnalyticsPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
-              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={70}/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={72}/>
               <Tooltip formatter={v=>[`₹${Number(v).toLocaleString()}`, 'Revenue']}/>
-              <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv2)"/>
+              <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv2)" dot={false}/>
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -117,13 +117,13 @@ export default function AnalyticsPage() {
         {/* Orders bar chart */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Daily Orders</h2>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sales} margin={{top:5,right:20,left:0,bottom:5}}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={sales} margin={{top:20,right:30,left:0,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
-              <YAxis tick={{fontSize:11}} width={40}/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
+              <YAxis tick={{fontSize:11}} width={40} allowDecimals={false}/>
               <Tooltip/>
-              <Bar dataKey="orders" fill="#D97706" radius={[4,4,0,0]}/>
+              <Bar dataKey="orders" fill="#D97706" radius={[4,4,0,0]} maxBarSize={40}/>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -131,10 +131,10 @@ export default function AnalyticsPage() {
         {/* Avg order value line */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Avg Order Value</h2>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={sales} margin={{top:5,right:20,left:10,bottom:5}}>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={sales} margin={{top:20,right:40,left:10,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
               <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={65}/>
               <Tooltip formatter={v=>[`₹${Number(v).toFixed(0)}`,'Avg Value']}/>
               <Line type="monotone" dataKey="avg_order_value" stroke="#3f9a67" strokeWidth={2} dot={false}/>
