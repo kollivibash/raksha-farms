@@ -22,7 +22,7 @@ export default function CheckoutPage() {
   const { user }        = useAuth()
   const { addToast }    = useToast()
   const navigate        = useNavigate()
-  const { addresses, LABEL_ICONS } = useAddresses()
+  const { addresses, addAddress, LABEL_ICONS } = useAddresses()
   const { plans: subscriptionPlans } = useSubscriptions()
 
   const [step, setStep]   = useState(1)
@@ -30,25 +30,32 @@ export default function CheckoutPage() {
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [placing, setPlacing] = useState(false)
 
-  // Step 1 form — pre-fill from user profile or last saved address
-  const [form, setForm] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_saved_address')
-      const addr  = saved ? JSON.parse(saved) : {}
-      return {
-        name:        user?.name     || addr.name    || '',
-        phone:       user?.phone    || addr.phone   || '',
-        address:     addr.address   || '',
-        city:        addr.city      || '',
-        pincode:     addr.pincode   || '',
-        notes:       '',
-        saveAddress: false,
-      }
-    } catch {
-      return { name: user?.name || '', phone: user?.phone || '', address: '', city: '', pincode: '', notes: '', saveAddress: false }
-    }
+  // Step 1 form — pre-fill from user profile only (address filled from DB addresses below)
+  const [form, setForm] = useState({
+    name:    user?.name  || '',
+    phone:   user?.phone || '',
+    address: '',
+    city:    '',
+    pincode: '',
+    notes:   '',
   })
   const [errors, setErrors] = useState({})
+  const [prefilled, setPrefilled] = useState(false)
+
+  // Pre-fill form from most recent saved address (loaded from DB)
+  useEffect(() => {
+    if (prefilled || addresses.length === 0) return
+    const latest = addresses[0]
+    setForm(f => ({
+      ...f,
+      name:    f.name    || latest.name    || '',
+      phone:   f.phone   || latest.phone   || '',
+      address: f.address || latest.address || '',
+      city:    f.city    || latest.city    || '',
+      pincode: f.pincode || latest.pincode || '',
+    }))
+    setPrefilled(true)
+  }, [addresses, prefilled])
 
   // Step 2: delivery slot
   const [selectedSlot, setSelectedSlot] = useState('morning')
@@ -195,24 +202,15 @@ export default function CheckoutPage() {
       return
     }
 
-    // Save address for next order (localStorage for offline fallback)
-    const addrPayload = {
+    // Save the used address to DB so it shows up next time (cache-proof)
+    addAddress({
+      label:   'Home',
       name:    form.name.trim(),
       phone:   form.phone.trim(),
       address: form.address.trim(),
       city:    form.city.trim(),
       pincode: form.pincode.trim(),
-    }
-    localStorage.setItem('rf_saved_address', JSON.stringify(addrPayload))
-    // Also persist to backend so it survives cache clears (for logged-in users)
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/addresses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...addrPayload, label: 'Home' }),
-      }).catch(() => {})
-    }
+    }).catch(() => {})
 
     addOrder({ ...order, backendId })
     // Stock already deducted server-side in transaction; sync local context so UI reflects it

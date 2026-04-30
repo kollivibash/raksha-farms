@@ -49,12 +49,8 @@ export function AuthProvider({ children }) {
   // After any login: sync orders immediately using every available method
   function syncAllOrders(phone = null) {
     syncOrdersByUser()
-    // Also sync by phone from saved address (works even before orders load)
-    const savedAddr = (() => {
-      try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} }
-    })()
-    const p = phone || savedAddr.phone
-    if (p) syncOrdersByPhone(p)
+    // Sync by phone if available (phone passed from login form takes priority)
+    if (phone) syncOrdersByPhone(phone)
   }
 
   // Wait for Google GSI script to load

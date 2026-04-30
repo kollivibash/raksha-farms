@@ -29,11 +29,10 @@ export default function MyOrdersPage() {
   const allOrders = getOrdersByUser(user?.email)
   const hasToken = !!localStorage.getItem('auth_token')
 
-  // Pre-fill phone from saved address
+  // Pre-fill phone from user profile
   useEffect(() => {
-    const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
-    if (savedAddr.phone) setPhoneInput(savedAddr.phone)
-  }, [])
+    if (user?.phone) setPhoneInput(user.phone)
+  }, [user?.phone])
 
   // Sync on mount + every 30s in background (picks up status/rejection changes from admin)
   useEffect(() => {
@@ -44,10 +43,8 @@ export default function MyOrdersPage() {
       }
 
       const token = localStorage.getItem('auth_token')
-      const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
 
       // 1. JWT sync — fetches /api/orders/mine and applies ALL fields
-      //    (status, notes, total) to localStorage via applyBackendOrders
       if (token) {
         try {
           await syncOrdersByUser()
@@ -55,10 +52,8 @@ export default function MyOrdersPage() {
         } catch { /* silent */ }
       }
 
-      // 2. Phone sync — ALWAYS run after JWT sync (not just as fallback)
-      //    This is what picks up rejection notes for orders found by phone.
-      //    Previously had an early `return` that skipped this for logged-in users — FIXED.
-      const phone = user?.phone || savedAddr.phone
+      // 2. Phone sync — picks up rejection notes for orders found by phone
+      const phone = user?.phone
       if (phone) {
         if (isMount && !token) setSyncMsg(`Searching by phone ${phone}…`)
         try { await syncOrdersByPhone(phone) } catch { /* silent */ }
@@ -91,8 +86,7 @@ export default function MyOrdersPage() {
   async function handleForceSync() {
     setSyncing(true)
     await syncOrdersByUser()
-    const savedAddr = (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}') } catch { return {} } })()
-    const phone = user?.phone || savedAddr.phone || allOrders[0]?.customer?.phone
+    const phone = user?.phone || allOrders[0]?.customer?.phone
     if (phone) await syncOrdersByPhone(phone)
     setSyncing(false)
   }
@@ -103,7 +97,7 @@ export default function MyOrdersPage() {
       userEmail: user?.email,
       userProvider: user?.provider,
       localOrders: allOrders.length,
-      savedPhone: (() => { try { return JSON.parse(localStorage.getItem('rf_saved_address') || '{}').phone || 'none' } catch { return 'none' } })(),
+      savedPhone: user?.phone || 'none',
       backendVersion: null,
       apiOrdersResult: null,
     }
