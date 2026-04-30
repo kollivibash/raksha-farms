@@ -120,7 +120,8 @@ function DetailDrawer({ subId, onClose, onRefresh }) {
     finally { setBusy(false) }
   }
 
-  const items = detail ? (Array.isArray(detail.items) ? detail.items : JSON.parse(detail.items || '[]')) : []
+  const safeParseItems = (v) => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]') } catch { return [] } }
+  const items = detail ? safeParseItems(detail.items) : []
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -467,7 +468,7 @@ export default function SubscriptionsPage() {
                 </thead>
                 <tbody>
                   {todayList.map(s => {
-                    const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]')
+                    const items = (() => { try { return Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]') } catch { return [] } })()
                     return (
                       <tr key={s.id} className="border-t border-gray-50 hover:bg-gray-50 transition">
                         <td className="px-4 py-3">
@@ -593,7 +594,7 @@ export default function SubscriptionsPage() {
                 </td></tr>
               )}
               {subs.map(s => {
-                const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]')
+                const items = (() => { try { return Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]') } catch { return [] } })()
                 const isBusy = busy === s.id
                 return (
                   <tr key={s.id} className={`border-b border-gray-50 hover:bg-gray-50 transition ${!s.is_active ? 'opacity-60' : ''}`}>

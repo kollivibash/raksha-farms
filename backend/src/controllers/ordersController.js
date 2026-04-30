@@ -3,6 +3,13 @@ import pool from '../config/database.js'
 
 const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 
+// Server-side delivery fee — mirrors frontend calcDelivery so the fee cannot be spoofed
+const FREE_DELIVERY_THRESHOLD = 500
+function calcDeliveryFee(subtotal, deliverySlot) {
+  if (subtotal >= FREE_DELIVERY_THRESHOLD) return 0
+  return deliverySlot === 'express' ? 60 : 30
+}
+
 // ── Helper: safely parse previously rejected items from order notes ─────────
 function getPrevRejectedIds(ord) {
   try {
@@ -19,11 +26,19 @@ export async function createOrder(req, res) {
 
     await client.query('BEGIN')
 
-    let serverTotal = deliveryFee || 0
+    // Bug 2: calculate delivery fee server-side — client value is ignored
+    let serverSubtotal = 0
     const validatedItems = []
 
     for (const item of items) {
       if (!item.id) continue
+
+      // Bug 1: reject zero / negative / non-numeric quantities
+      const qty = Math.floor(Number(item.quantity))
+      if (!qty || qty < 1) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: `Invalid quantity for "${item.name}". Must be a positive whole number.` })
+      }
 
       // ── FIX BUG 1: Atomic stock check + deduct in one statement ──────────────
       // SELECT FOR UPDATE locks the row so no concurrent transaction can read
@@ -71,7 +86,7 @@ export async function createOrder(req, res) {
         `UPDATE products
          SET stock = stock - $1, updated_at = NOW()
          WHERE id = $2 AND stock >= $1`,
-        [item.quantity, item.id]
+        [qty, item.id]
       )
       if (rowCount === 0) {
         await client.query('ROLLBACK')
@@ -80,14 +95,54 @@ export async function createOrder(req, res) {
 
       await client.query(
         `INSERT INTO inventory_logs (product_id, change, reason) VALUES ($1,$2,'order_placed')`,
-        [item.id, -item.quantity]
+        [item.id, -qty]
       ).catch(() => {})
 
-      serverTotal += serverPrice * item.quantity
-      validatedItems.push({ ...item, price: serverPrice, unit: serverUnit })
+      serverSubtotal += serverPrice * qty
+      validatedItems.push({ ...item, quantity: qty, price: serverPrice, unit: serverUnit })
     }
 
     // ── Build order ───────────────────────────────────────────────────────────
+    // Bug 2: server-computed delivery fee; client value ignored
+    const serverDeliveryFee = calcDeliveryFee(serverSubtotal, deliverySlot)
+
+    // Bug 3: apply subscription plan discount server-side
+    let subscriptionDiscount = 0
+    let resolvedPlan = null
+    if (subscription_plan_id) {
+      const { rows: planRows } = await client.query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
+      resolvedPlan = planRows[0]
+      if (!resolvedPlan) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Subscription plan not found.' })
+      }
+      if (resolvedPlan.discount_percent > 0) {
+        subscriptionDiscount = Math.round(serverSubtotal * resolvedPlan.discount_percent / 100)
+      }
+    }
+
+    // Bug 4 + 5 + 6: validate coupon server-side, apply discount, only count usage if valid
+    let couponDiscount = 0
+    if (coupon_code) {
+      const { rows: cRows } = await client.query(
+        `SELECT * FROM coupons WHERE code=$1 AND is_active=true
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND used_count < max_uses`,
+        [coupon_code.toUpperCase()]
+      )
+      const coupon = cRows[0]
+      if (coupon && serverSubtotal >= Number(coupon.min_order || 0)) {
+        const raw = coupon.type === 'percent'
+          ? (serverSubtotal * coupon.value / 100)
+          : Number(coupon.value)
+        couponDiscount = Math.min(Math.round(raw), serverSubtotal)
+      }
+      // used_count only incremented after discount is confirmed valid (below, after order insert)
+    }
+
+    const discountedSubtotal = Math.max(0, serverSubtotal - subscriptionDiscount - couponDiscount)
+    const serverTotal        = discountedSubtotal + serverDeliveryFee
+
     const emailForAddress = req.user?.email || customer?.email || ''
     const address = {
       name:    customer?.name    || '',
@@ -110,8 +165,8 @@ export async function createOrder(req, res) {
       [
         userId,
         JSON.stringify(validatedItems),
-        serverTotal - (deliveryFee || 0),
-        deliveryFee || 0,
+        discountedSubtotal,
+        serverDeliveryFee,
         serverTotal,
         paymentMethod || 'cod',
         JSON.stringify(address),
@@ -122,28 +177,23 @@ export async function createOrder(req, res) {
     const order = rows[0]
 
     // ── Subscription creation — fatal: if sub creation fails, roll back the whole order ──
-    if (subscription_plan_id) {
+    if (resolvedPlan) {
       if (!userId) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: 'You must be logged in to create a subscription.' })
       }
-      const { rows: planRows } = await client.query('SELECT * FROM subscription_plans WHERE id=$1', [subscription_plan_id])
-      const plan = planRows[0]
-      if (!plan) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: 'Subscription plan not found.' })
-      }
       const nextDelivery = new Date()
-      nextDelivery.setDate(nextDelivery.getDate() + (plan.frequency_days || 1))
+      nextDelivery.setDate(nextDelivery.getDate() + (resolvedPlan.frequency_days || 1))
       await client.query(
         `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, true)`,
-        [userId, plan.id, JSON.stringify(validatedItems), serverTotal, plan.frequency, nextDelivery.toISOString().split('T')[0]]
+        // Bug 3: store discounted price per cycle, not raw serverSubtotal
+        [userId, resolvedPlan.id, JSON.stringify(validatedItems), discountedSubtotal, resolvedPlan.frequency, nextDelivery.toISOString().split('T')[0]]
       )
     }
 
-    // ── Coupon: increment used_count atomically ───────────────────────────────
-    if (coupon_code) {
+    // Bug 5: increment used_count only when discount was actually applied
+    if (coupon_code && couponDiscount > 0) {
       await client.query(
         `UPDATE coupons SET used_count = used_count + 1
          WHERE code = $1 AND is_active = true AND used_count < max_uses

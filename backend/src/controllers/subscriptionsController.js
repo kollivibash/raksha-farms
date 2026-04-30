@@ -286,12 +286,11 @@ export async function generateOrders(req, res) {
         [sub.id, targetDate, orderId, sub.price_per_cycle]
       )
 
-      // Advance next_delivery + increment delivery_count + reset payment for new cycle
+      // Bug 7: do NOT increment delivery_count here — only increment when actually delivered
       const days = sub.frequency_days || 1
       await client.query(
         `UPDATE subscriptions
-         SET delivery_count = delivery_count + 1,
-             next_delivery  = $1::date + ($2 || ' days')::interval,
+         SET next_delivery  = $1::date + ($2 || ' days')::interval,
              payment_status = 'cod_due',
              updated_at     = NOW()
          WHERE id = $3`,
@@ -408,6 +407,12 @@ export async function markDelivered(req, res) {
       ? String(s.next_delivery).split('T')[0]
       : today
 
+    // Bug 9: block marking delivered for future delivery dates
+    if (deliveryDate > today) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: `Cannot mark delivered: next delivery is scheduled for ${deliveryDate}, not yet due.` })
+    }
+
     // ── Fix 3: Idempotency — if a 'delivered' record already exists for this
     //    delivery date the cycle was already marked delivered (double-click or
     //    retry). Return the current subscription state without mutating anything.
@@ -425,12 +430,13 @@ export async function markDelivered(req, res) {
       return res.json({ ...cur[0], _idempotent: true })
     }
 
-    // Record delivery: COD is collected at the door → payment_status = paid
+    // Bug 8: UPDATE the pending row created by generateOrders; INSERT if none exists (manual mark)
     await client.query(
       `INSERT INTO subscription_deliveries
          (subscription_id, delivery_date, status, payment_status, payment_amount)
        VALUES ($1,$2,'delivered','paid',$3)
-       ON CONFLICT (subscription_id, delivery_date) DO NOTHING`,
+       ON CONFLICT (subscription_id, delivery_date)
+         DO UPDATE SET status='delivered', payment_status='paid'`,
       [req.params.id, deliveryDate, s.price_per_cycle]
     )
 
@@ -477,6 +483,12 @@ export async function skipDelivery(req, res) {
     const days = s.frequency_days || 1
     const today = new Date().toISOString().split('T')[0]
     const skipDate = s.next_delivery ? String(s.next_delivery).split('T')[0] : today
+
+    // Bug 9: block skipping future deliveries (more than 1 day ahead)
+    if (skipDate > today) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: `Cannot skip: next delivery is scheduled for ${skipDate}, not yet due.` })
+    }
 
     // Idempotency: already skipped this date → return current state
     const { rows: existing } = await client.query(
