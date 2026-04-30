@@ -22,7 +22,7 @@ export default function CheckoutPage() {
   const { user }        = useAuth()
   const { addToast }    = useToast()
   const navigate        = useNavigate()
-  const { addresses, addAddress, LABEL_ICONS } = useAddresses()
+  const { addresses, addAddress, deleteAddress, LABEL_ICONS } = useAddresses()
   const { plans: subscriptionPlans } = useSubscriptions()
 
   const [step, setStep]   = useState(1)
@@ -42,20 +42,35 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState({})
   const [prefilled, setPrefilled] = useState(false)
 
-  // Pre-fill form from most recent saved address (loaded from DB)
+  // Deduplicate saved addresses by address+city+pincode fingerprint
+  const uniqueAddresses = addresses.filter((addr, idx, arr) =>
+    arr.findIndex(a =>
+      (a.address || '').trim().toLowerCase() === (addr.address || '').trim().toLowerCase() &&
+      (a.city    || '').trim().toLowerCase() === (addr.city    || '').trim().toLowerCase() &&
+      (a.pincode || '').trim()               === (addr.pincode || '').trim()
+    ) === idx
+  )
+
+  // Selected saved address id (null = entering new address)
+  const [selectedAddressId, setSelectedAddressId] = useState(null)
+
+  // Auto-select first saved address on load
   useEffect(() => {
-    if (prefilled || addresses.length === 0) return
-    const latest = addresses[0]
-    setForm(f => ({
-      ...f,
-      name:    f.name    || latest.name    || '',
-      phone:   f.phone   || latest.phone   || '',
-      address: f.address || latest.address || '',
-      city:    f.city    || latest.city    || '',
-      pincode: f.pincode || latest.pincode || '',
-    }))
-    setPrefilled(true)
-  }, [addresses, prefilled])
+    if (uniqueAddresses.length > 0 && selectedAddressId === null && !prefilled) {
+      const first = uniqueAddresses[0]
+      setSelectedAddressId(first.id)
+      setForm(f => ({
+        ...f,
+        name:    first.name    || f.name    || '',
+        phone:   first.phone   || f.phone   || '',
+        address: first.address || '',
+        city:    first.city    || '',
+        pincode: first.pincode || '',
+        notes:   first.notes   || '',
+      }))
+      setPrefilled(true)
+    }
+  }, [uniqueAddresses, selectedAddressId, prefilled])
 
   // Step 2: delivery slot
   const [selectedSlot, setSelectedSlot] = useState('morning')
@@ -377,35 +392,101 @@ export default function CheckoutPage() {
                 Delivery Information
               </h2>
 
-              {/* ── Saved Addresses Quick-Pick ── */}
-              {addresses.length > 0 && (
+              {/* ── Saved Addresses (Swiggy/Zomato style) ── */}
+              {uniqueAddresses.length > 0 && (
                 <div className="mb-5">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Saved Addresses</p>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Saved Addresses</p>
                   <div className="flex flex-col gap-2">
-                    {addresses.map(addr => (
-                      <button
-                        key={addr.id}
-                        type="button"
-                        onClick={() => fillFromAddress(addr)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-gray-100 hover:border-forest-300 hover:bg-forest-50 text-left transition-all duration-200 active:scale-[0.98]"
-                      >
-                        <span className="text-xl">{LABEL_ICONS[addr.label] || '📍'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800">{addr.label} · {addr.name}</p>
-                          <p className="text-xs text-gray-400 truncate">{addr.address}, {addr.city} – {addr.pincode}</p>
+                    {uniqueAddresses.map(addr => {
+                      const isSelected = selectedAddressId === addr.id
+                      return (
+                        <div
+                          key={addr.id}
+                          onClick={() => {
+                            setSelectedAddressId(addr.id)
+                            setForm(f => ({
+                              ...f,
+                              name:    addr.name    || f.name,
+                              phone:   addr.phone   || f.phone,
+                              address: addr.address || '',
+                              city:    addr.city    || '',
+                              pincode: addr.pincode || '',
+                              notes:   addr.notes   || '',
+                            }))
+                            setErrors({})
+                          }}
+                          className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
+                            isSelected
+                              ? 'border-forest-500 bg-forest-50 shadow-sm'
+                              : 'border-gray-100 hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          {/* Radio circle */}
+                          <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                            isSelected ? 'border-forest-500' : 'border-gray-300'
+                          }`}>
+                            {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-forest-500"/>}
+                          </div>
+
+                          {/* Icon + details */}
+                          <span className="text-xl flex-shrink-0">{LABEL_ICONS[addr.label] || '📍'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-800">{addr.label}</p>
+                            <p className="text-xs text-gray-500 truncate mt-0.5">
+                              {addr.address}, {addr.city} – {addr.pincode}
+                            </p>
+                            {addr.phone && <p className="text-xs text-gray-400 mt-0.5">📞 {addr.phone}</p>}
+                          </div>
+
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              deleteAddress(addr.id)
+                              if (isSelected) {
+                                setSelectedAddressId(null)
+                                setForm(f => ({ ...f, address: '', city: '', pincode: '', notes: '' }))
+                                setPrefilled(false)
+                              }
+                            }}
+                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                          </button>
                         </div>
-                        <span className="text-xs text-forest-600 font-semibold flex-shrink-0 whitespace-nowrap">Use →</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 mt-3 mb-1">
-                    <div className="flex-1 h-px bg-gray-100" />
-                    <span className="text-xs text-gray-400">or fill manually</span>
-                    <div className="flex-1 h-px bg-gray-100" />
+                      )
+                    })}
+
+                    {/* Add new address option */}
+                    <div
+                      onClick={() => {
+                        setSelectedAddressId(null)
+                        setForm(f => ({ ...f, address: '', city: '', pincode: '', notes: '' }))
+                        setErrors({})
+                      }}
+                      className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
+                        selectedAddressId === null
+                          ? 'border-forest-400 bg-forest-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                        selectedAddressId === null ? 'border-forest-500' : 'border-gray-300'
+                      }`}>
+                        {selectedAddressId === null && <div className="w-2.5 h-2.5 rounded-full bg-forest-500"/>}
+                      </div>
+                      <span className="text-lg">➕</span>
+                      <p className="text-sm font-semibold text-gray-700">Add a new address</p>
+                    </div>
                   </div>
                 </div>
               )}
 
+              {/* Manual form — shown when adding a new address OR no saved addresses */}
+              {(selectedAddressId === null || uniqueAddresses.length === 0) && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Full Name" placeholder="e.g. Priya Sharma" value={form.name} onChange={(v) => setField('name', v)} error={errors.name} required />
@@ -432,6 +513,7 @@ export default function CheckoutPage() {
                 </div>
                 <Field label="Delivery Notes (optional)" placeholder="Gate code, landmark, special instructions..." value={form.notes} onChange={(v) => setField('notes', v)} textarea />
               </div>
+              )}
               <button onClick={handleNext} className="btn-primary w-full mt-6 flex items-center justify-center gap-2">
                 Choose Delivery Slot
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
