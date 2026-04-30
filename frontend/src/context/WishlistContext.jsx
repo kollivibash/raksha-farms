@@ -1,33 +1,78 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 
 const WishlistContext = createContext(null)
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
+function getToken() { return localStorage.getItem('auth_token') }
+
+async function saveWishlistToBackend(items) {
+  const token = getToken()
+  if (!token) return
+  try {
+    await fetch(`${BACKEND_URL}/api/wishlist`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items }),
+    })
+  } catch { /* silent */ }
+}
+
+async function loadWishlistFromBackend() {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/wishlist`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch { return null }
+}
 
 export function WishlistProvider({ children }) {
-  const [wishlist, setWishlist] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('rf_wishlist') || '[]')
-    } catch { return [] }
-  })
+  // Start empty — load from DB, never from localStorage
+  const [wishlist, setWishlist] = useState([])
+  const saveTimer = useRef(null)
+
+  // Sync from backend on mount and on login
+  const syncFromBackend = useCallback(async () => {
+    const items = await loadWishlistFromBackend()
+    if (Array.isArray(items)) setWishlist(items)
+  }, [])
 
   useEffect(() => {
-    localStorage.setItem('rf_wishlist', JSON.stringify(wishlist))
+    syncFromBackend()
+    window.addEventListener('rf:login', syncFromBackend)
+    return () => window.removeEventListener('rf:login', syncFromBackend)
+  }, [syncFromBackend])
+
+  // Debounced save to backend whenever wishlist changes
+  useEffect(() => {
+    if (!getToken()) return         // don't save if not logged in
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => saveWishlistToBackend(wishlist), 1500)
   }, [wishlist])
 
   function toggleWishlist(product) {
-    setWishlist((prev) => {
-      const exists = prev.find((p) => p.id === product.id)
-      return exists
-        ? prev.filter((p) => p.id !== product.id)
-        : [...prev, product]
+    setWishlist(prev => {
+      const exists = prev.find(p => p.id === product.id)
+      return exists ? prev.filter(p => p.id !== product.id) : [...prev, product]
     })
   }
 
   function isWishlisted(productId) {
-    return wishlist.some((p) => p.id === productId)
+    return wishlist.some(p => p.id === productId)
   }
 
   function clearWishlist() {
     setWishlist([])
+    const token = getToken()
+    if (token) {
+      fetch(`${BACKEND_URL}/api/wishlist`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {})
+    }
   }
 
   return (

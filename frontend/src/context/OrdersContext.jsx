@@ -16,15 +16,15 @@ const STATUS_MAP = {
 const OrdersContext = createContext(null)
 
 export function OrdersProvider({ children }) {
+  // Start from localStorage cache for fast render, then always overwrite from DB
   const [orders, setOrders] = useState(() => {
     try {
       const saved = localStorage.getItem('rf_orders')
       return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
+    } catch { return [] }
   })
 
+  // Keep localStorage as a fast-render cache only (DB is the source of truth)
   useEffect(() => {
     localStorage.setItem('rf_orders', JSON.stringify(orders))
   }, [orders])
@@ -148,6 +148,12 @@ export function OrdersProvider({ children }) {
       applyBackendOrders(await res.json())
     } catch { /* silent */ }
   }, [])
+
+  // On login (new device / cache cleared): restore orders from DB immediately
+  useEffect(() => {
+    window.addEventListener('rf:login', syncOrdersByUser)
+    return () => window.removeEventListener('rf:login', syncOrdersByUser)
+  }, [syncOrdersByUser])
 
   return (
     <OrdersContext.Provider value={{ orders, addOrder, updateOrderStatus, getOrder, getOrdersByUser, syncOrdersByPhone, syncOrdersByUser }}>

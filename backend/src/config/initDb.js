@@ -125,6 +125,15 @@ export async function initDb() {
       )
     `)
 
+    // Wishlist table for cross-device sync
+    await query(`
+      CREATE TABLE IF NOT EXISTS wishlists (
+        user_id    UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        items      JSONB DEFAULT '[]',
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+
     // Add offer_price to existing products table if missing
     await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS offer_price DECIMAL(10,2) DEFAULT NULL`)
 

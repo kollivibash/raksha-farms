@@ -22,7 +22,7 @@ async function loadCartFromBackend() {
   if (!token) return null
   try {
     const res = await fetch(`${BACKEND_URL}/api/cart`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) return null
     return await res.json()
@@ -30,17 +30,19 @@ async function loadCartFromBackend() {
 }
 
 export function CartProvider({ children }) {
+  // For logged-in users: start empty, load from DB
+  // For guests: read from localStorage as fallback
   const [cart, setCart] = useState(() => {
+    if (getToken()) return []   // logged in → wait for DB load
     try { return JSON.parse(localStorage.getItem('rf_cart') || '[]') }
     catch { return [] }
   })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const saveTimer = useRef(null)
 
-  // Persist to localStorage on every change
+  // Persist to localStorage (guest fallback) and debounce backend save
   useEffect(() => {
     localStorage.setItem('rf_cart', JSON.stringify(cart))
-    // Debounce backend save — 2s after last change
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => saveCartToBackend(cart), 2000)
   }, [cart])
@@ -54,9 +56,10 @@ export function CartProvider({ children }) {
   // Merge backend cart into local state
   async function mergeBackendCart() {
     const backendItems = await loadCartFromBackend()
-    if (!backendItems?.length) return
+    if (!Array.isArray(backendItems)) return
     setCart(prev => {
-      // Backend items take priority; local-only items are appended
+      if (!backendItems.length) return prev  // backend empty — keep local guest items
+      // Backend takes priority; local-only items appended
       const merged = [...backendItems]
       prev.forEach(local => {
         if (!merged.find(b => b.cartKey === local.cartKey)) merged.push(local)
@@ -65,10 +68,10 @@ export function CartProvider({ children }) {
     })
   }
 
-  // On mount: sync if already logged in
+  // On mount: load from DB if logged in
   useEffect(() => { mergeBackendCart() }, []) // eslint-disable-line
 
-  // On login (same tab): rf:login event is dispatched by AuthContext
+  // On login: rf:login event dispatched by AuthContext → sync from DB
   useEffect(() => {
     window.addEventListener('rf:login', mergeBackendCart)
     return () => window.removeEventListener('rf:login', mergeBackendCart)
@@ -76,10 +79,10 @@ export function CartProvider({ children }) {
 
   function addToCart(product, quantity = 1, selectedVariant = null) {
     const key = selectedVariant ? `${product.id}_${selectedVariant.label}` : product.id
-    setCart((prev) => {
-      const existing = prev.find((item) => item.cartKey === key)
+    setCart(prev => {
+      const existing = prev.find(item => item.cartKey === key)
       if (existing) {
-        return prev.map((item) =>
+        return prev.map(item =>
           item.cartKey === key
             ? { ...item, quantity: Math.min(item.quantity + quantity, product.stock) }
             : item
@@ -92,15 +95,14 @@ export function CartProvider({ children }) {
   }
 
   function removeFromCart(cartKey) {
-    setCart((prev) => prev.filter((item) => item.cartKey !== cartKey))
+    setCart(prev => prev.filter(item => item.cartKey !== cartKey))
   }
 
   function updateQuantity(cartKey, quantity) {
     if (quantity <= 0) { removeFromCart(cartKey); return }
-    setCart((prev) =>
-      prev.map((item) => {
+    setCart(prev =>
+      prev.map(item => {
         if (item.cartKey !== cartKey) return item
-        // Cap to available stock (stock > 0 check guards products with no stock field)
         const capped = (item.stock > 0) ? Math.min(quantity, item.stock) : quantity
         return { ...item, quantity: capped }
       })
@@ -109,7 +111,7 @@ export function CartProvider({ children }) {
 
   function clearCart() {
     setCart([])
-    // Also clear on backend immediately
+    localStorage.removeItem('rf_cart')
     const token = getToken()
     if (token) {
       fetch(`${BACKEND_URL}/api/cart`, {
@@ -119,9 +121,9 @@ export function CartProvider({ children }) {
     }
   }
 
-  function openDrawer()  { setDrawerOpen(true) }
-  function closeDrawer() { setDrawerOpen(false) }
-  function toggleDrawer() { setDrawerOpen((v) => !v) }
+  function openDrawer()   { setDrawerOpen(true)  }
+  function closeDrawer()  { setDrawerOpen(false) }
+  function toggleDrawer() { setDrawerOpen(v => !v) }
 
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0)
   const totalPrice = cart.reduce((s, i) => s + i.price * i.quantity, 0)
