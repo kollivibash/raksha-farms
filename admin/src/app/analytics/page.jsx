@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
         <h2 className="font-semibold text-gray-800 mb-4">Revenue Over Time</h2>
         {loading ? <div className="h-64 flex items-center justify-center text-gray-400">Loading…</div> : (
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={sales} margin={{top:20,right:40,left:10,bottom:10}}>
+            <AreaChart data={sales} margin={{top:20,right:60,left:10,bottom:10}}>
               <defs>
                 <linearGradient id="rv2" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#1B4332" stopOpacity={0.15}/>
@@ -104,10 +104,10 @@ export default function AnalyticsPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:20,right:20}}/>
               <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={72}/>
               <Tooltip formatter={v=>[`₹${Number(v).toLocaleString()}`, 'Revenue']}/>
-              <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv2)" dot={false}/>
+              <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv2)" dot={false} isAnimationActive={false}/>
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -132,12 +132,12 @@ export default function AnalyticsPage() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Avg Order Value</h2>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={sales} margin={{top:20,right:40,left:10,bottom:10}}>
+            <LineChart data={sales} margin={{top:20,right:60,left:10,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:10,right:10}}/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd" padding={{left:20,right:20}}/>
               <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={65}/>
               <Tooltip formatter={v=>[`₹${Number(v).toFixed(0)}`,'Avg Value']}/>
-              <Line type="monotone" dataKey="avg_order_value" stroke="#3f9a67" strokeWidth={2} dot={false}/>
+              <Line type="monotone" dataKey="avg_order_value" stroke="#3f9a67" strokeWidth={2} dot={false} isAnimationActive={false}/>
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -150,13 +150,14 @@ export default function AnalyticsPage() {
           {categories.length === 0 ? (
             <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={categories} dataKey="revenue" nameKey="category" cx="50%" cy="50%" outerRadius={80}
-                  label={({category,percent})=>`${category} ${(percent*100).toFixed(0)}%`} labelLine={false}>
+                <Pie data={categories} dataKey="revenue" nameKey="category" cx="50%" cy="50%"
+                  outerRadius={75} isAnimationActive={false}>
                   {categories.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]}/>)}
                 </Pie>
                 <Tooltip formatter={v=>`₹${Number(v).toLocaleString()}`}/>
+                <Legend iconType="circle" iconSize={10} formatter={(v) => <span style={{fontSize:11,color:'#555'}}>{v}</span>}/>
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -168,15 +169,16 @@ export default function AnalyticsPage() {
           {pieStatusData.length === 0 ? (
             <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={pieStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
-                  label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
+                <Pie data={pieStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                  outerRadius={75} isAnimationActive={false}>
                   {pieStatusData.map((r, i) => (
                     <Cell key={i} fill={STATUS_COLORS[r.name] || COLORS[i % COLORS.length]}/>
                   ))}
                 </Pie>
                 <Tooltip formatter={(v,n)=>[v, n]}/>
+                <Legend iconType="circle" iconSize={10} formatter={(v) => <span style={{fontSize:11,color:'#555',textTransform:'capitalize'}}>{v}</span>}/>
               </PieChart>
             </ResponsiveContainer>
           )}
