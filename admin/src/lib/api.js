@@ -105,4 +105,10 @@ export const categoriesAPI = {
   delete: (id) => api.delete(`/categories/${id}`),
 }
 
+// ── Settings ──────────────────────────────────────────────
+export const settingsAPI = {
+  getDelivery: () => api.get('/settings/delivery'),
+  updateDelivery: (data) => api.put('/settings/delivery', data),
+}
+
 export default api

@@ -3,11 +3,34 @@ import pool from '../config/database.js'
 
 const VALID_STATUSES = ['placed','accepted','preparing','out_for_delivery','delivered','cancelled','rejected']
 
-// Server-side delivery fee — mirrors frontend calcDelivery so the fee cannot be spoofed
-const FREE_DELIVERY_THRESHOLD = 500
-function calcDeliveryFee(subtotal, deliverySlot) {
-  if (subtotal >= FREE_DELIVERY_THRESHOLD) return 0
-  return deliverySlot === 'express' ? 60 : 30
+// Server-side delivery fee — reads from DB settings (cached for 60s)
+let _feeCache = null
+let _feeCacheAt = 0
+async function getDeliverySettings() {
+  const now = Date.now()
+  if (_feeCache && now - _feeCacheAt < 60_000) return _feeCache
+  try {
+    const { rows } = await query(
+      `SELECT key, value FROM store_settings WHERE key IN ('free_delivery_threshold','delivery_fee_standard','delivery_fee_express')`
+    )
+    const s = {}
+    for (const r of rows) s[r.key] = parseFloat(r.value)
+    _feeCache = {
+      threshold: s.free_delivery_threshold ?? 500,
+      standard:  s.delivery_fee_standard   ?? 30,
+      express:   s.delivery_fee_express    ?? 60,
+    }
+    _feeCacheAt = now
+  } catch {
+    _feeCache = { threshold: 500, standard: 30, express: 60 }
+  }
+  return _feeCache
+}
+
+async function calcDeliveryFee(subtotal, deliverySlot) {
+  const { threshold, standard, express } = await getDeliverySettings()
+  if (subtotal >= threshold) return 0
+  return deliverySlot === 'express' ? express : standard
 }
 
 // ── Helper: safely parse previously rejected items from order notes ─────────
@@ -49,13 +72,9 @@ export async function createOrder(req, res) {
       )
       const prod = pRows[0]
 
-      if (!prod) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `Product "${item.name}" could not be found. Please remove it from your cart and try again.` })
-      }
-      if (!prod.is_active) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: `"${prod.name}" is no longer available. Please remove it from your cart and try again.` })
+      if (!prod || !prod.is_active) {
+        // Skip products that no longer exist or are inactive — don't fail the whole order
+        continue
       }
 
       // ── FIX BUG 2: Resolve variant price/unit before falling back to base ────
@@ -102,9 +121,15 @@ export async function createOrder(req, res) {
       validatedItems.push({ ...item, quantity: qty, price: serverPrice, unit: serverUnit })
     }
 
+    // Guard: all items were skipped (unavailable / deleted products)
+    if (validatedItems.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'None of the items in your cart are currently available. Please update your cart and try again.' })
+    }
+
     // ── Build order ───────────────────────────────────────────────────────────
     // Bug 2: server-computed delivery fee; client value ignored
-    const serverDeliveryFee = calcDeliveryFee(serverSubtotal, deliverySlot)
+    const serverDeliveryFee = await calcDeliveryFee(serverSubtotal, deliverySlot)
 
     // Bug 3: apply subscription plan discount server-side
     let subscriptionDiscount = 0
@@ -182,13 +207,19 @@ export async function createOrder(req, res) {
         await client.query('ROLLBACK')
         return res.status(400).json({ error: 'You must be logged in to create a subscription.' })
       }
-      const nextDelivery = new Date()
-      nextDelivery.setDate(nextDelivery.getDate() + (resolvedPlan.frequency_days || 1))
+      // Same-day delivery if order placed before 3 PM IST; otherwise next day
+      const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const cutoffHour = 15 // 3 PM IST
+      const startToday = nowIST.getHours() < cutoffHour
+      const deliveryDate = new Date(nowIST)
+      if (!startToday) deliveryDate.setDate(deliveryDate.getDate() + 1)
+      const pad = n => String(n).padStart(2, '0')
+      const nextDeliveryStr = `${deliveryDate.getFullYear()}-${pad(deliveryDate.getMonth()+1)}-${pad(deliveryDate.getDate())}`
       await client.query(
         `INSERT INTO subscriptions (user_id, plan_id, items, price_per_cycle, frequency, next_delivery, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, true)`,
         // Bug 3: store discounted price per cycle, not raw serverSubtotal
-        [userId, resolvedPlan.id, JSON.stringify(validatedItems), discountedSubtotal, resolvedPlan.frequency, nextDelivery.toISOString().split('T')[0]]
+        [userId, resolvedPlan.id, JSON.stringify(validatedItems), discountedSubtotal, resolvedPlan.frequency, nextDeliveryStr]
       )
     }
 

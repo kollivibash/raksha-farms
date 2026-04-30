@@ -53,7 +53,7 @@ export default function CartPage() {
         <div className="lg:col-span-2 space-y-3">
           {cart.map((item) => {
             const product = products.find((p) => p.id === item.id)
-            const maxStock = product ? product.stock : item.quantity
+            const maxStock = product ? product.stock : 999
             return (
               <CartItemRow
                 key={item.cartKey || item.id}

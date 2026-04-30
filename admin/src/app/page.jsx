@@ -48,7 +48,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Revenue — Last 7 Days</h2>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={daily}>
+            <AreaChart data={daily} margin={{top:5,right:20,left:10,bottom:5}}>
               <defs>
                 <linearGradient id="rv" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#1B4332" stopOpacity={0.15}/>
@@ -57,7 +57,7 @@ export default function Dashboard() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
               <XAxis dataKey="label" tick={{fontSize:12}} />
-              <YAxis tick={{fontSize:12}} tickFormatter={v=>`₹${v}`} />
+              <YAxis tick={{fontSize:12}} tickFormatter={v=>`₹${v}`} width={70}/>
               <Tooltip formatter={v=>[`₹${Number(v).toLocaleString()}`,'Revenue']}/>
               <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv)"/>
             </AreaChart>
@@ -67,10 +67,10 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Orders Trend</h2>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={daily}>
+            <BarChart data={daily} margin={{top:5,right:20,left:0,bottom:5}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
               <XAxis dataKey="label" tick={{fontSize:12}}/>
-              <YAxis tick={{fontSize:12}}/>
+              <YAxis tick={{fontSize:12}} width={40}/>
               <Tooltip/>
               <Bar dataKey="orders" fill="#D97706" radius={[4,4,0,0]}/>
             </BarChart>

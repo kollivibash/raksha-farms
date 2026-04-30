@@ -2,11 +2,11 @@ import { query } from '../config/database.js'
 
 export async function getDashboardStats(req, res) {
   try {
-    const [orders, revenue, users, pending, daily, topProducts] = await Promise.all([
+    const [orders, revenue, users, pending, daily, topProducts, statusBreakdown, paymentMethods] = await Promise.all([
       query(`SELECT COUNT(*) as total FROM orders`),
       query(`SELECT COALESCE(SUM(total),0) as total FROM orders WHERE status='delivered'`),
       query(`SELECT COUNT(*) as total FROM users WHERE role='user'`),
-      query(`SELECT COUNT(*) as total FROM orders WHERE status IN ('placed','accepted')`),
+      query(`SELECT COUNT(*) as total FROM orders WHERE status IN ('placed','accepted','preparing','out_for_delivery')`),
       query(`
         SELECT
           TO_CHAR(d.date, 'Mon DD') AS label,
@@ -15,7 +15,7 @@ export async function getDashboardStats(req, res) {
         FROM generate_series(
           CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'
         ) AS d(date)
-        LEFT JOIN orders o ON DATE(o.created_at) = d.date AND o.status != 'cancelled'
+        LEFT JOIN orders o ON DATE(o.created_at) = d.date AND o.status NOT IN ('cancelled','rejected')
         GROUP BY d.date ORDER BY d.date ASC
       `),
       query(`
@@ -27,7 +27,17 @@ export async function getDashboardStats(req, res) {
         JOIN products p ON p.id = (item->>'id')::uuid
         WHERE o.status = 'delivered'
         GROUP BY p.id ORDER BY units_sold DESC LIMIT 5
-      `)
+      `),
+      query(`
+        SELECT status, COUNT(*) as count
+        FROM orders GROUP BY status ORDER BY count DESC
+      `),
+      query(`
+        SELECT payment_method, COUNT(*) as count,
+               COALESCE(SUM(total),0) as revenue
+        FROM orders WHERE status NOT IN ('cancelled','rejected')
+        GROUP BY payment_method
+      `),
     ])
 
     res.json({
@@ -37,8 +47,10 @@ export async function getDashboardStats(req, res) {
         activeUsers:   parseInt(users.rows[0].total),
         pendingOrders: parseInt(pending.rows[0].total),
       },
-      dailySales:   daily.rows,
-      topProducts:  topProducts.rows,
+      dailySales:      daily.rows,
+      topProducts:     topProducts.rows,
+      statusBreakdown: statusBreakdown.rows,
+      paymentMethods:  paymentMethods.rows,
     })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -55,7 +67,7 @@ export async function getSalesAnalytics(req, res) {
       FROM generate_series(
         CURRENT_DATE - ($1 || ' days')::interval, CURRENT_DATE, '1 day'
       ) AS d(date)
-      LEFT JOIN orders o ON DATE(o.created_at) = d.date AND o.status != 'cancelled'
+      LEFT JOIN orders o ON DATE(o.created_at) = d.date AND o.status NOT IN ('cancelled','rejected')
       GROUP BY d.date ORDER BY d.date ASC
     `, [period])
     res.json(rows)
@@ -74,6 +86,17 @@ export async function getCategoryRevenue(req, res) {
       JOIN products p ON p.id = (item->>'id')::uuid
       WHERE o.status = 'delivered'
       GROUP BY p.category ORDER BY revenue DESC
+    `)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+export async function getOrderStatusBreakdown(req, res) {
+  try {
+    const { rows } = await query(`
+      SELECT status, COUNT(*) as count,
+             COALESCE(SUM(total),0) as revenue
+      FROM orders GROUP BY status ORDER BY count DESC
     `)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }

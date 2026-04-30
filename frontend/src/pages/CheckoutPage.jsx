@@ -638,7 +638,7 @@ export default function CheckoutPage() {
             <div className="border-t pt-3 mb-2">
               {couponApplied ? (
                 <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-sm">
-                  <span className="text-green-700 font-semibold">🎟 {couponApplied.code} — ₹{couponApplied.discount} off</span>
+                  <span className="text-green-700 font-semibold">🎟 {couponApplied.code} — ₹{couponApplied.discount} off{couponApplied.coupon?.type === 'percent' ? ` (${couponApplied.coupon.value}%)` : ''}</span>
                   <button onClick={() => { setCouponApplied(null); setCouponCode('') }} className="text-gray-400 hover:text-red-500 text-xs ml-2">✕</button>
                 </div>
               ) : (

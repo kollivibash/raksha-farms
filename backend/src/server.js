@@ -21,6 +21,7 @@ import cartRoutes              from './routes/cart.js'
 import categoriesRoutes        from './routes/categories.js'
 import addressesRoutes         from './routes/addresses.js'
 import wishlistRoutes          from './routes/wishlist.js'
+import settingsRoutes          from './routes/settings.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -70,6 +71,7 @@ app.use('/api/cart',               cartRoutes)
 app.use('/api/categories',         categoriesRoutes)
 app.use('/api/addresses',          addressesRoutes)
 app.use('/api/wishlist',           wishlistRoutes)
+app.use('/api/settings',          settingsRoutes)
 
 // Health check — includes build date so we can confirm Render deployed latest code
 app.get('/health', (req, res) => res.json({

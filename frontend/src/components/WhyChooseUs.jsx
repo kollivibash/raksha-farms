@@ -73,20 +73,6 @@ export default function WhyChooseUs() {
           ))}
         </div>
 
-        {/* Trust bar */}
-        <div className="mt-12 reveal delay-200 flex flex-wrap justify-center gap-8 text-sm text-gray-500">
-          {[
-            { icon: '✅', text: '500+ Happy Families' },
-            { icon: '🏆', text: '5★ Rated on Google' },
-            { icon: '🌿', text: 'Zero Pesticides' },
-            { icon: '🤝', text: 'Trusted Since 2020' },
-          ].map(({ icon, text }) => (
-            <div key={text} className="flex items-center gap-2">
-              <span className="text-xl">{icon}</span>
-              <span className="font-medium text-gray-600">{text}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   )

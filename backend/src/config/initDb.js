@@ -277,6 +277,24 @@ export async function initDb() {
       END $$
     `).catch(() => {}) // non-fatal if constraint already has right values
 
+    // Store settings table — key/value pairs for admin-configurable options
+    await query(`
+      CREATE TABLE IF NOT EXISTS store_settings (
+        key        VARCHAR(100) PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {})
+
+    // Seed default delivery fee settings
+    await query(`
+      INSERT INTO store_settings (key, value) VALUES
+        ('free_delivery_threshold', '500'),
+        ('delivery_fee_standard', '30'),
+        ('delivery_fee_express', '60')
+      ON CONFLICT (key) DO NOTHING
+    `).catch(() => {})
+
     // Upsert admin user and sync password with ADMIN_SECRET env var
     // This ensures the backend admin password always matches the frontend VITE_ADMIN_PASSWORD
     const adminSecret = process.env.ADMIN_SECRET || 'raksha@admin2024'

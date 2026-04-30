@@ -3,41 +3,73 @@ import { useEffect, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { analyticsAPI } from '../../lib/api'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 
-const COLORS = ['#1B4332','#D97706','#3f9a67','#6db38d','#eab842','#a0ccb3','#f5dea1']
+const COLORS = ['#1B4332','#D97706','#3f9a67','#6db38d','#eab842','#a0ccb3','#f5dea1','#ef4444']
+const STATUS_COLORS = {
+  delivered: '#1B4332', placed: '#3b82f6', accepted: '#8b5cf6',
+  preparing: '#f59e0b', out_for_delivery: '#06b6d4',
+  cancelled: '#ef4444', rejected: '#6b7280',
+}
+
+function StatCard({ label, value, sub, color = '#1B4332' }) {
+  return (
+    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+      <p className="text-2xl font-bold" style={{ color }}>{value}</p>
+      <p className="text-sm text-gray-500 mt-1">{label}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
 
 export default function AnalyticsPage() {
   const [sales, setSales] = useState([])
   const [categories, setCategories] = useState([])
+  const [dashboard, setDashboard] = useState(null)
   const [period, setPeriod] = useState('30')
   const [loading, setLoading] = useState(true)
 
   async function load() {
     setLoading(true)
     try {
-      const [s, c] = await Promise.all([
+      const [s, c, d] = await Promise.all([
         analyticsAPI.getSales(period),
-        analyticsAPI.getCategories()
+        analyticsAPI.getCategories(),
+        analyticsAPI.getDashboard(),
       ])
-      setSales(s.data); setCategories(c.data)
+      setSales(s.data)
+      setCategories(c.data)
+      setDashboard(d.data)
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
   useEffect(() => { load() }, [period])
 
-  const totalRevenue = sales.reduce((a,b) => a + Number(b.revenue), 0)
-  const totalOrders  = sales.reduce((a,b) => a + Number(b.orders), 0)
-  const avgOrderVal  = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  const totalRevenue  = sales.reduce((a,b) => a + Number(b.revenue), 0)
+  const totalOrders   = sales.reduce((a,b) => a + Number(b.orders), 0)
+  const avgOrderVal   = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  const peakDay       = sales.length > 0 ? sales.reduce((a,b) => Number(b.revenue) > Number(a.revenue) ? b : a, sales[0]) : null
+  const statusRows    = dashboard?.statusBreakdown || []
+  const paymentRows   = dashboard?.paymentMethods  || []
+
+  const deliveredCount  = statusRows.find(r => r.status === 'delivered')?.count || 0
+  const cancelledCount  = statusRows.find(r => r.status === 'cancelled')?.count || 0
+  const rejectedCount   = statusRows.find(r => r.status === 'rejected')?.count || 0
+  const totalAll        = statusRows.reduce((a,b) => a + Number(b.count), 0)
+  const completionRate  = totalAll > 0 ? ((Number(deliveredCount) / totalAll) * 100).toFixed(1) : '0.0'
+  const cancellationRate = totalAll > 0 ? (((Number(cancelledCount) + Number(rejectedCount)) / totalAll) * 100).toFixed(1) : '0.0'
+
+  const pieStatusData = statusRows.map(r => ({ name: r.status, value: Number(r.count) }))
+  const paymentPieData = paymentRows.map(r => ({ name: r.payment_method, value: Number(r.count), revenue: Number(r.revenue) }))
 
   return (
     <AdminLayout title="Analytics">
       {/* Period selector */}
       <div className="flex gap-2 mb-6">
         {[['7','7 Days'],['30','30 Days'],['90','90 Days']].map(([v,l]) => (
-          <button key={v} onClick={()=>setPeriod(v)}
+          <button key={v} onClick={() => setPeriod(v)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition
               ${period===v ? 'bg-[#1B4332] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
             {l}
@@ -45,26 +77,26 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label:'Total Revenue', value:`₹${totalRevenue.toLocaleString()}` },
-          { label:'Total Orders',  value: totalOrders.toLocaleString() },
-          { label:'Avg Order Value', value:`₹${Math.round(avgOrderVal).toLocaleString()}` },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm text-center">
-            <p className="text-3xl font-bold text-[#1B4332]">{s.value}</p>
-            <p className="text-sm text-gray-500 mt-1">{s.label}</p>
-          </div>
-        ))}
+      {/* KPI row */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Revenue"    value={`₹${totalRevenue.toLocaleString()}`} />
+        <StatCard label="Total Orders"     value={totalOrders.toLocaleString()} color="#D97706"/>
+        <StatCard label="Avg Order Value"  value={`₹${Math.round(avgOrderVal).toLocaleString()}`} color="#3f9a67"/>
+        <StatCard label="Completion Rate"  value={`${completionRate}%`} color="#6db38d"
+          sub={`Cancellation: ${cancellationRate}%`}/>
       </div>
+      {peakDay && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-6 text-sm text-amber-800">
+          📈 <strong>Peak day:</strong> {peakDay.label} — ₹{Number(peakDay.revenue).toLocaleString()} revenue, {peakDay.orders} orders
+        </div>
+      )}
 
       {/* Revenue chart */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-6">
         <h2 className="font-semibold text-gray-800 mb-4">Revenue Over Time</h2>
         {loading ? <div className="h-64 flex items-center justify-center text-gray-400">Loading…</div> : (
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={sales}>
+            <AreaChart data={sales} margin={{top:5,right:20,left:10,bottom:5}}>
               <defs>
                 <linearGradient id="rv2" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#1B4332" stopOpacity={0.15}/>
@@ -73,7 +105,7 @@ export default function AnalyticsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
               <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
-              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`}/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={70}/>
               <Tooltip formatter={v=>[`₹${Number(v).toLocaleString()}`, 'Revenue']}/>
               <Area type="monotone" dataKey="revenue" stroke="#1B4332" strokeWidth={2} fill="url(#rv2)"/>
             </AreaChart>
@@ -81,30 +113,47 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
         {/* Orders bar chart */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Daily Orders</h2>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sales}>
+            <BarChart data={sales} margin={{top:5,right:20,left:0,bottom:5}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
               <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
-              <YAxis tick={{fontSize:11}}/>
+              <YAxis tick={{fontSize:11}} width={40}/>
               <Tooltip/>
               <Bar dataKey="orders" fill="#D97706" radius={[4,4,0,0]}/>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Category pie */}
+        {/* Avg order value line */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">Avg Order Value</h2>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={sales} margin={{top:5,right:20,left:10,bottom:5}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+              <XAxis dataKey="label" tick={{fontSize:11}} interval="preserveStartEnd"/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>`₹${v}`} width={65}/>
+              <Tooltip formatter={v=>[`₹${Number(v).toFixed(0)}`,'Avg Value']}/>
+              <Line type="monotone" dataKey="avg_order_value" stroke="#3f9a67" strokeWidth={2} dot={false}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        {/* Category pie */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm xl:col-span-1">
           <h2 className="font-semibold text-gray-800 mb-4">Revenue by Category</h2>
           {categories.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-gray-400">No data yet</div>
+            <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={categories} dataKey="revenue" nameKey="category" cx="50%" cy="50%" outerRadius={90} label={({category,percent})=>`${category} ${(percent*100).toFixed(0)}%`}>
+                <Pie data={categories} dataKey="revenue" nameKey="category" cx="50%" cy="50%" outerRadius={80}
+                  label={({category,percent})=>`${category} ${(percent*100).toFixed(0)}%`} labelLine={false}>
                   {categories.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]}/>)}
                 </Pie>
                 <Tooltip formatter={v=>`₹${Number(v).toLocaleString()}`}/>
@@ -112,7 +161,86 @@ export default function AnalyticsPage() {
             </ResponsiveContainer>
           )}
         </div>
+
+        {/* Order status breakdown */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm xl:col-span-1">
+          <h2 className="font-semibold text-gray-800 mb-4">Order Status</h2>
+          {pieStatusData.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={pieStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
+                  label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
+                  {pieStatusData.map((r, i) => (
+                    <Cell key={i} fill={STATUS_COLORS[r.name] || COLORS[i % COLORS.length]}/>
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v,n)=>[v, n]}/>
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Payment method breakdown */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm xl:col-span-1">
+          <h2 className="font-semibold text-gray-800 mb-3">Payment Methods</h2>
+          {paymentPieData.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-gray-400">No data yet</div>
+          ) : (
+            <div className="space-y-3 mt-2">
+              {paymentPieData.map((p, i) => (
+                <div key={p.name}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium text-gray-700 uppercase">{p.name}</span>
+                    <span className="text-gray-500">{p.value} orders · ₹{p.revenue.toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="h-2 rounded-full" style={{
+                      width: `${(p.value / paymentPieData.reduce((a,b)=>a+b.value,0)*100).toFixed(1)}%`,
+                      backgroundColor: COLORS[i % COLORS.length]
+                    }}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Status count table */}
+      {statusRows.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">Order Status Breakdown</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2 text-gray-500 font-medium">Status</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Count</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statusRows.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2.5">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={{ backgroundColor: `${STATUS_COLORS[r.status] || '#6b7280'}22`, color: STATUS_COLORS[r.status] || '#6b7280' }}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-semibold">{Number(r.count).toLocaleString()}</td>
+                    <td className="py-2.5 text-right text-gray-500">
+                      {totalAll > 0 ? `${(Number(r.count)/totalAll*100).toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

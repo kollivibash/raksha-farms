@@ -173,7 +173,7 @@ export default function Navbar() {
                           ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                           : user?.name?.[0]?.toUpperCase()}
                       </div>
-                      <span className="hidden sm:block text-sm font-semibold text-gray-700 max-w-[70px] truncate">
+                      <span className="hidden sm:block text-sm font-semibold text-gray-700 min-w-[80px] max-w-[120px] truncate">
                         {user?.name?.split(' ')[0]}
                       </span>
                       <svg className={`w-3 h-3 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
