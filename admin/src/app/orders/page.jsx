@@ -156,7 +156,7 @@ function RejectModal({ order, onClose, onConfirm }) {
 }
 
 // ── Order Row (expanded card) ──────────────────────────────────────────────────
-function OrderRow({ o, expanded, onToggle, onChangeStatus, onReject }) {
+function OrderRow({ o, expanded, onToggle, onChangeStatus, onReject, isSelected, onSelect }) {
   const isOpen  = expanded === o.id
   const addr    = parseAddr(o)
   const notes   = parseNotes(o)
@@ -172,6 +172,15 @@ function OrderRow({ o, expanded, onToggle, onChangeStatus, onReject }) {
         className="flex items-center gap-3 px-4 py-3.5 bg-white cursor-pointer select-none"
         onClick={onToggle}
       >
+        {/* Checkbox */}
+        <div className="flex-shrink-0 flex items-center mr-1" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onSelect(o.id)}
+            className="w-4 h-4 rounded text-[#1B4332] border-gray-300 focus:ring-[#1B4332]"
+          />
+        </div>
         {/* Avatar */}
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1B4332] to-emerald-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
           {name[0]?.toUpperCase()}
@@ -357,6 +366,7 @@ export default function OrdersPage() {
   const [downloading, setDownloading] = useState(false)
   const [toast, setToast]           = useState(null)
   const [tick, setTick]             = useState(0)
+  const [selectedOrders, setSelectedOrders] = useState(new Set())
   const filtersRef = useRef({ page, status, search, fromDate, toDate })
 
   useEffect(() => { filtersRef.current = { page, status, search, fromDate, toDate } }, [page, status, search, fromDate, toDate])
@@ -364,6 +374,31 @@ export default function OrdersPage() {
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
+  }
+
+  const toggleSelectOrder = (id) => {
+    setSelectedOrders(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkStatusChange = async (newStatus) => {
+    if (selectedOrders.size === 0) return
+    const ids = Array.from(selectedOrders)
+    try {
+      setLoading(true)
+      await Promise.all(ids.map(id => ordersAPI.updateStatus(id, newStatus)))
+      showToast(`Successfully updated ${ids.length} orders to ${STATUS_META[newStatus].label}`, 'success')
+      setSelectedOrders(new Set())
+      load()
+    } catch (e) {
+      showToast('Failed to update some orders. Try again.', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const load = useCallback(async (overrides = {}) => {
@@ -403,6 +438,16 @@ export default function OrdersPage() {
   function clearFilters() {
     setStatus(''); setSearch(''); setFromDate(''); setToDate(''); setPage(1)
     forceReload()
+  }
+
+  function applyPresetDateRange(days) {
+    const today = new Date()
+    const from = new Date()
+    from.setDate(today.getDate() - days)
+
+    setToDate(today.toISOString().slice(0, 10))
+    setFromDate(from.toISOString().slice(0, 10))
+    setPage(1)
   }
 
   async function changeStatus(id, newStatus) {
@@ -498,9 +543,29 @@ export default function OrdersPage() {
 
       {/* ── Header row ── */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-extrabold text-gray-900">Orders</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{total.toLocaleString()} total · Page {page} of {pages}</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-xl font-extrabold text-gray-900">Orders</h1>
+            <p className="text-xs text-gray-400 mt-0.5">{total.toLocaleString()} total · Page {page} of {pages}</p>
+          </div>
+          {selectedOrders.size > 0 && (
+            <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100 animate-in fade-in">
+              <span className="text-xs font-bold text-blue-700">{selectedOrders.size} selected</span>
+              <div className="h-4 w-px bg-blue-200 mx-1"></div>
+              <div className="relative group">
+                <button className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900">
+                  Change Status <ChevronDown size={14}/>
+                </button>
+                <div className="absolute top-full left-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 hidden group-hover:block z-50 overflow-hidden">
+                  {STATUSES.filter(s => s !== 'rejected' && s !== 'cancelled').map(s => (
+                    <button key={s} onClick={() => handleBulkStatusChange(s)} className="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      {STATUS_META[s].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={forceReload} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors" title="Refresh">
@@ -542,6 +607,12 @@ export default function OrdersPage() {
               <Calendar size={13} className="text-gray-400"/>
               <input type="date" value={toDate} onChange={e => changeFilter('toDate', e.target.value)}
                 className="outline-none text-sm text-gray-700 bg-transparent w-28"/>
+            </div>
+
+            {/* Date Presets */}
+            <div className="hidden md:flex items-center gap-1 ml-2">
+              <button onClick={() => applyPresetDateRange(7)} className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-md border border-gray-200">7D</button>
+              <button onClick={() => applyPresetDateRange(30)} className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-md border border-gray-200">30D</button>
             </div>
           </div>
 
@@ -612,6 +683,8 @@ export default function OrdersPage() {
                     onToggle={() => setExpanded(expanded === o.id ? null : o.id)}
                     onChangeStatus={changeStatus}
                     onReject={setRejectOrder}
+                    isSelected={selectedOrders.has(o.id)}
+                    onSelect={toggleSelectOrder}
                   />
                 ))}
               </div>

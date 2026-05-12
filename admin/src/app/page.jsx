@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
-import { analyticsAPI } from '../lib/api'
+import { analyticsAPI, productsAPI } from '../lib/api'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend
@@ -141,13 +141,23 @@ const OrdTooltip = ({ active, payload, label }) => {
 // ─── main page ───────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [data, setData]     = useState(null)
+  const [lowStockItems, setLowStockItems] = useState([])
   const [loading, setLoading] = useState(true)
   const now = new Date()
   const todayLabel = now.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
 
   useEffect(() => {
-    analyticsAPI.getDashboard()
-      .then(r => setData(r.data))
+    Promise.all([
+      analyticsAPI.getDashboard(),
+      productsAPI.getAll({ page: 1, limit: 100 })
+    ])
+      .then(([dashRes, prodRes]) => {
+        setData(dashRes.data)
+        if (prodRes?.data?.products) {
+          const lowStock = prodRes.data.products.filter(p => Number(p.stock) < 10)
+          setLowStockItems(lowStock)
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -307,6 +317,36 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ── low stock alerts widget ────────────────────────────────────────── */}
+      {lowStockItems.length > 0 && (
+        <div className="mb-6 bg-orange-50 rounded-2xl border border-orange-100 shadow-sm overflow-hidden animate-in fade-in">
+          <div className="px-6 py-4 flex items-center gap-3 border-b border-orange-100/50">
+            <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={16} className="text-orange-700" />
+            </div>
+            <div>
+              <h2 className="font-bold text-orange-900 text-base leading-tight">Low Stock Alerts</h2>
+              <p className="text-xs text-orange-700 font-medium">These items need restocking soon</p>
+            </div>
+          </div>
+          <div className="p-4 flex gap-4 overflow-x-auto scrollbar-hide">
+            {lowStockItems.map(p => (
+              <div key={p.id} className="flex-shrink-0 bg-white rounded-xl p-3 border border-orange-100 shadow-sm w-48 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center text-lg flex-shrink-0">
+                  {p.emoji || <Package size={18} className="text-orange-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-800 text-sm truncate">{p.name}</p>
+                  <p className="text-xs font-semibold mt-0.5" style={{ color: p.stock === 0 ? '#dc2626' : '#ea580c' }}>
+                    {p.stock === 0 ? 'Out of Stock' : `Only ${p.stock} left`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── orders trend (7d) + recent orders ──────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">

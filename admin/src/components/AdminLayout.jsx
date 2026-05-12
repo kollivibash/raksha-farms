@@ -23,6 +23,7 @@ export default function AdminLayout({ children, title }) {
 
   // Sidebar mobile state
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Order notifications
   const [newOrders, setNewOrders]     = useState([])
@@ -116,10 +117,15 @@ export default function AdminLayout({ children, title }) {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        mobileOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
       {/* Main content — offset by sidebar width on md+ */}
-      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+      <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} flex flex-col min-h-screen`}>
 
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between gap-3">

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse,
-  Users, Tag, RefreshCw, BarChart2, Settings, LogOut, Leaf, Grid3X3, X
+  Users, Tag, RefreshCw, BarChart2, Settings, LogOut, Leaf, Grid3X3, X, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import Cookies from 'js-cookie'
 
@@ -21,7 +21,7 @@ const nav = [
   { label:'Settings',      href:'/settings',              icon: Settings },
 ]
 
-export default function Sidebar({ mobileOpen = true, onClose }) {
+export default function Sidebar({ mobileOpen = true, onClose, collapsed = false, onToggleCollapse }) {
   const path = usePathname()
   function logout() {
     Cookies.remove('admin_token')
@@ -47,20 +47,23 @@ export default function Sidebar({ mobileOpen = true, onClose }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 w-64 bg-[#1B4332] text-white flex flex-col z-50
-        transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 bg-[#1B4332] text-white flex flex-col z-50
+        transition-all duration-300 ease-in-out
+        ${collapsed ? 'w-20' : 'w-64'}
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0
       `}>
         {/* Logo + Close button */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+        <div className={`flex items-center gap-3 ${collapsed ? 'px-4' : 'px-6'} py-5 border-b border-white/10 relative`}>
           <div className="w-9 h-9 bg-[#D97706] rounded-xl flex items-center justify-center flex-shrink-0">
             <Leaf size={18} className="text-white" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-base leading-none">Raksha Farms</p>
-            <p className="text-xs text-green-300 mt-0.5">Admin Panel</p>
-          </div>
+          {!collapsed && (
+            <div className="flex-1 min-w-0 transition-opacity duration-300">
+              <p className="font-bold text-base leading-none">Raksha Farms</p>
+              <p className="text-xs text-green-300 mt-0.5">Admin Panel</p>
+            </div>
+          )}
           {/* Close button — visible only on mobile */}
           <button
             onClick={onClose}
@@ -72,26 +75,35 @@ export default function Sidebar({ mobileOpen = true, onClose }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 overflow-y-auto">
+        <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden">
           {nav.map(({ label, href, icon: Icon }) => {
             const active = path === href || (href !== '/' && path.startsWith(href))
             return (
-              <Link key={href} href={href} onClick={handleLinkClick}
-                className={`flex items-center gap-3 px-6 py-2.5 text-sm font-medium transition-colors mx-2 rounded-lg mb-0.5
+              <Link key={href} href={href} onClick={handleLinkClick} title={collapsed ? label : undefined}
+                className={`flex items-center gap-3 ${collapsed ? 'justify-center px-0' : 'px-6'} py-2.5 text-sm font-medium transition-colors mx-2 rounded-lg mb-0.5
                   ${active ? 'bg-white/15 text-white' : 'text-green-200 hover:bg-white/10 hover:text-white'}`}>
-                <Icon size={18} />
-                {label}
+                <Icon size={18} className="flex-shrink-0" />
+                {!collapsed && <span className="truncate">{label}</span>}
               </Link>
             )
           })}
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-white/10">
-          <button onClick={logout}
-            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-300 hover:bg-white/10 rounded-lg transition-colors">
-            <LogOut size={18} /> Sign Out
+        {/* Bottom actions */}
+        <div className="border-t border-white/10">
+          {/* Toggle collapse (desktop only) */}
+          <button onClick={onToggleCollapse}
+            className={`hidden md:flex items-center ${collapsed ? 'justify-center px-0' : 'px-6'} gap-3 w-full py-3 text-sm text-green-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/10`}>
+            {collapsed ? <ChevronRight size={18} /> : <><ChevronLeft size={18} /> <span className="truncate">Collapse Sidebar</span></>}
           </button>
+          {/* Logout */}
+          <div className="p-4">
+            <button onClick={logout} title={collapsed ? 'Sign Out' : undefined}
+              className={`flex items-center gap-3 w-full ${collapsed ? 'justify-center px-0' : 'px-4'} py-2.5 text-sm text-red-300 hover:bg-white/10 rounded-lg transition-colors`}>
+              <LogOut size={18} className="flex-shrink-0" />
+              {!collapsed && <span className="truncate">Sign Out</span>}
+            </button>
+          </div>
         </div>
       </aside>
     </>

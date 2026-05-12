@@ -96,6 +96,7 @@ export function CartProvider({ children }) {
   }, [])
 
   function addToCart(product, quantity = 1, selectedVariant = null) {
+    window.dispatchEvent(new Event('rf:cart-shake'))
     const key = selectedVariant ? `${product.id}_${selectedVariant.label}` : product.id
     // Guard: never silently drop a click for a product whose stock is unknown
     // (undefined/null) or zero — only cap when stock is a known positive number.
