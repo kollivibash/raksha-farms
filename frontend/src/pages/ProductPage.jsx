@@ -6,6 +6,8 @@ import { useWishlist } from '../context/WishlistContext'
 import { useToast } from '../context/ToastContext'
 import ProductCard from '../components/ProductCard'
 import SubscriptionSheet from '../components/SubscriptionSheet'
+import Skeleton from '../components/Skeleton'
+import RecentlyViewed from '../components/RecentlyViewed'
 
 function Stars({ rating }) {
   return (
@@ -22,7 +24,7 @@ function Stars({ rating }) {
 export default function ProductPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { products } = useProducts()
+  const { products, loading } = useProducts()
   const { cart, addToCart, updateQuantity, openDrawer } = useCart()
   const { isWishlisted, toggleWishlist } = useWishlist()
   const { addToast } = useToast()
@@ -39,6 +41,18 @@ export default function ProductPage() {
       setSelectedVariant(product.variants[0])
     } else {
       setSelectedVariant(null)
+    }
+
+    // Add to recently viewed
+    if (product) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('rf_recently_viewed') || '[]')
+        const filtered = stored.filter(storedId => storedId !== product.id)
+        const updated = [product.id, ...filtered].slice(0, 10) // keep last 10
+        localStorage.setItem('rf_recently_viewed', JSON.stringify(updated))
+      } catch {
+        // ignore
+      }
     }
   }, [id, product])
   const [qty, setQty] = useState(1)
@@ -60,6 +74,29 @@ export default function ProductPage() {
       .filter((p) => p.category === product.category && p.id !== product.id)
       .slice(0, 4)
   }, [product, products])
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-pulse">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-24 h-4 bg-gray-200 rounded"></div>
+          <div className="w-4 h-4 bg-gray-200 rounded"></div>
+          <div className="w-32 h-4 bg-gray-200 rounded"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
+          <div className="aspect-square bg-gray-200 rounded-3xl w-full"></div>
+          <div className="flex flex-col gap-4">
+            <div className="w-20 h-6 bg-gray-200 rounded-full mb-2"></div>
+            <div className="w-3/4 h-10 bg-gray-200 rounded"></div>
+            <div className="w-48 h-6 bg-gray-200 rounded mt-4"></div>
+            <div className="w-32 h-12 bg-gray-200 rounded mt-4"></div>
+            <div className="w-full h-24 bg-gray-200 rounded mt-4"></div>
+            <div className="w-full h-14 bg-gray-200 rounded-xl mt-8"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!product) {
     return (
@@ -279,6 +316,9 @@ export default function ProductPage() {
           </div>
         </section>
       )}
+
+      {/* Recently Viewed */}
+      <RecentlyViewed />
     </div>
   )
 }

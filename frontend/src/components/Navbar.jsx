@@ -24,8 +24,18 @@ export default function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen]     = useState(false)
   const [searchQuery, setSearchQuery]   = useState('')
+  const [isShaking, setIsShaking]       = useState(false)
   const userMenuRef = useRef(null)
   const searchRef   = useRef(null)
+
+  useEffect(() => {
+    const handleCartShake = () => {
+      setIsShaking(true)
+      setTimeout(() => setIsShaking(false), 400)
+    }
+    window.addEventListener('rf:cart-shake', handleCartShake)
+    return () => window.removeEventListener('rf:cart-shake', handleCartShake)
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
@@ -119,7 +129,7 @@ export default function Navbar() {
                 </a>
 
                 {/* Cart button — badge is a sibling (not child) so btn-ripple overflow:hidden can't clip it */}
-                <div className="relative">
+                <div className={`relative ${isShaking ? 'cart-shake' : ''}`}>
                   <button
                     onClick={openDrawer}
                     className="btn-ripple flex items-center gap-2 bg-forest-500 hover:bg-forest-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-forest"

@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import HeroSection from '../components/HeroSection'
 import WhyChooseUs from '../components/WhyChooseUs'
 import HowItWorks from '../components/HowItWorks'
 import ReviewsSection from '../components/ReviewsSection'
 import ProductCard from '../components/ProductCard'
+import Skeleton from '../components/Skeleton'
 import TrustBadges from '../components/TrustBadges'
 import FreeDeliveryBar from '../components/FreeDeliveryBar'
 import { useProducts } from '../context/ProductsContext'
@@ -20,9 +21,23 @@ function catColor(hex) {
 
 export default function HomePage() {
   useScrollReveal()
-  const { products } = useProducts()
+  const { products, loading } = useProducts()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [backendCats, setBackendCats] = useState(null) // null = not loaded yet
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchContainerRef = useRef(null)
+
+  // Click outside listener for search suggestions
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Fetch categories from backend; fall back to static list if API fails
   useEffect(() => {
@@ -166,7 +181,7 @@ export default function HomePage() {
 
           {/* Search + sort bar */}
           <div className="flex flex-col sm:flex-row gap-3 mb-5 reveal">
-            <div className="relative flex-1">
+            <div className="relative flex-1" ref={searchContainerRef}>
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -174,9 +189,36 @@ export default function HomePage() {
                 type="text"
                 placeholder="Search vegetables, fruits, oils, millets..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value) }}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setShowSuggestions(true)
+                }}
+                onFocus={() => setShowSuggestions(true)}
                 className="input-field pl-10"
               />
+              {/* Search Suggestions Dropdown */}
+              {showSuggestions && searchQuery.trim().length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                  {products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5).length > 0 ? (
+                    <ul className="divide-y divide-gray-50">
+                      {products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5).map(p => (
+                        <li key={p.id} onClick={() => navigate(`/product/${p.id}`)} className="flex items-center gap-3 px-4 py-3 hover:bg-sage-50 cursor-pointer transition-colors">
+                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-sage-50 flex-shrink-0">
+                            {p.image ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-lg">{p.emoji}</div>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 text-sm truncate">{p.name}</p>
+                            <p className="text-xs text-gray-500 capitalize">{p.category}</p>
+                          </div>
+                          <span className="font-bold text-forest-500 text-sm">₹{p.price}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="p-4 text-sm text-gray-500 text-center">No products found</div>
+                  )}
+                </div>
+              )}
             </div>
             <select
               value={sortBy}
@@ -210,7 +252,13 @@ export default function HomePage() {
           )}
 
           {/* Product grid */}
-          {filteredProducts.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+              {[...Array(10)].map((_, i) => (
+                <Skeleton key={i} />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="text-center py-20">
               <div className="w-20 h-20 mx-auto rounded-full bg-white flex items-center justify-center mb-4 shadow-card">
                 <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
