@@ -215,13 +215,23 @@ export async function searchCustomers(req, res) {
     // matches "+91 98765 43210" the same as "9876543210"
     const digits = raw.replace(/\D/g, '')
 
-    // Registered users — search across name / email / phone
+    // Registered users — search across name / email / phone.
+    // address: use profile address first; fall back to their most recent order address.
     const usersSql = `
       SELECT u.id::text AS id,
              u.name,
              COALESCE(NULLIF(u.phone,''), '') AS phone,
              u.email,
-             'user' AS source
+             'user' AS source,
+             COALESCE(
+               NULLIF(u.address, ''),
+               (SELECT o2.address->>'address'
+                FROM orders o2
+                WHERE o2.user_id = u.id
+                  AND o2.address->>'address' IS NOT NULL
+                  AND o2.address->>'address' != ''
+                ORDER BY o2.created_at DESC LIMIT 1)
+             ) AS address
       FROM users u
       WHERE u.role = 'user' AND u.is_active = true
         AND (
@@ -238,6 +248,7 @@ export async function searchCustomers(req, res) {
     // We dedupe by digits-only phone so the same person doesn't appear twice with
     // different phone formats. We also only return guests whose phone isn't already
     // in the users list (otherwise they'd be a duplicate of a registered user).
+    // address: pulled from the most recent matching order.
     const guestsSql = `
       SELECT DISTINCT ON (digits_phone)
         NULL::text AS id,
@@ -245,6 +256,7 @@ export async function searchCustomers(req, res) {
         o.address->>'phone' AS phone,
         COALESCE(o.address->>'email','') AS email,
         'guest' AS source,
+        COALESCE(o.address->>'address', '') AS address,
         RIGHT(REGEXP_REPLACE(o.address->>'phone','\\D','','g'),10) AS digits_phone,
         MAX(o.created_at) OVER (PARTITION BY RIGHT(REGEXP_REPLACE(o.address->>'phone','\\D','','g'),10)) AS last_order
       FROM orders o
@@ -272,7 +284,7 @@ export async function searchCustomers(req, res) {
     const merged = [...userRows, ...guestRows]
       .filter(r => r.name || r.phone)
       .slice(0, lim)
-      .map(r => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, source: r.source }))
+      .map(r => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, source: r.source, address: r.address || '' }))
 
     res.json(merged)
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong' }) }

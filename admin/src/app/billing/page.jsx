@@ -168,6 +168,7 @@ export default function BillingPage() {
     justPickedRef.current = true
     setCustomerName(c.name || '')
     setCustomerPhone(c.phone || '')
+    if (c.address) setDeliveryAddr(c.address)
     setLookupResults([])
     setLookupOpen(false)
     setLookupField(null)
@@ -868,6 +869,9 @@ function CustomerDropdown({ results, loading, onPick }) {
                   <p className="text-xs text-gray-500 truncate">
                     {c.phone || c.email || 'no contact info'}
                   </p>
+                  {c.address && (
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{c.address}</p>
+                  )}
                 </div>
               </button>
             </li>
