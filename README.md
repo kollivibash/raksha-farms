@@ -104,7 +104,10 @@ UPLOAD_DIR=/var/data/uploads
 VITE_API_URL=https://raksha-farms.onrender.com
 ```
 
-> **Important:** Remove `VITE_ADMIN_PASSWORD` from `.env.production` — it is not used and exposes a secret.
+> **Note:** Never put secrets in `frontend/.env.production`. Vite inlines any
+> `VITE_*` variable that source code references straight into the public JS
+> bundle, so anything here must be safe for the whole internet to read.
+> The admin password lives only in the backend's `ADMIN_SECRET`.
 
 ### admin/.env.local (local) / admin/.env.production (Vercel)
 

@@ -352,8 +352,9 @@ export async function initDb() {
       ON CONFLICT (key) DO NOTHING
     `).catch(() => {})
 
-    // Upsert admin user and sync password with ADMIN_SECRET env var
-    // This ensures the backend admin password always matches the frontend VITE_ADMIN_PASSWORD
+    // Upsert admin user and sync its password with the ADMIN_SECRET env var.
+    // ADMIN_SECRET is server-side only — it must never be mirrored into any
+    // frontend VITE_* variable, which would ship it in the public JS bundle.
     const adminSecret = process.env.ADMIN_SECRET || 'raksha@admin2024'
     const hashed = await bcrypt.hash(adminSecret, 10)
     await query(
