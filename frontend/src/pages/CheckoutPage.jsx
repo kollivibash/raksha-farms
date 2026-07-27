@@ -293,9 +293,11 @@ export default function CheckoutPage() {
       setPlacing(false); return
     }
 
-    // Save address if not already stored
+    // Save address if not already stored. Derived entries (reconstructed from
+    // order history) aren't real user_addresses rows, so they don't count as
+    // saved — placing this order is what promotes them to a stored address.
     const normalize = (s) => (s || '').trim().toLowerCase()
-    const alreadySaved = addresses.some(a =>
+    const alreadySaved = addresses.filter(a => !a.derived).some(a =>
       normalize(a.address) === normalize(form.address) &&
       normalize(a.city)    === normalize(form.city)    &&
       normalize(a.pincode) === normalize(form.pincode) &&
@@ -697,24 +699,27 @@ export default function CheckoutPage() {
                             {addr.phone && <p className="text-xs text-gray-400 mt-0.5">📞 {addr.phone}</p>}
                           </div>
 
-                          {/* Delete button */}
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation()
-                              deleteAddress(addr.id)
-                              if (isSelected) {
-                                setSelectedAddressId(null)
-                                setForm(f => ({ ...f, address: '', city: '', pincode: '', notes: '' }))
-                                setPrefilled(false)
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
-                          </button>
+                          {/* Delete button — derived addresses aren't saved rows,
+                              so there's nothing to delete server-side */}
+                          {!addr.derived && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation()
+                                deleteAddress(addr.id)
+                                if (isSelected) {
+                                  setSelectedAddressId(null)
+                                  setForm(f => ({ ...f, address: '', city: '', pincode: '', notes: '' }))
+                                  setPrefilled(false)
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       )
                     })}
