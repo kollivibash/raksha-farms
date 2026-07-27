@@ -5,15 +5,25 @@ dotenv.config()
 const { Pool } = pg
 
 const isProduction = process.env.NODE_ENV === 'production'
+const dbUrl = process.env.DATABASE_URL || ''
+
+// Managed Postgres (Neon, Render, Supabase…) requires TLS. Decide from the
+// connection string rather than NODE_ENV alone, so pointing a local dev server
+// at the hosted database works without extra flags.
+const needsSsl = isProduction
+  || /sslmode=require/i.test(dbUrl)
+  || /\.neon\.tech|\.render\.com|\.supabase\.co|\.aivencloud\.com/i.test(dbUrl)
 
 const pool = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
-        ssl: isProduction ? { rejectUnauthorized: false } : false,
-        max: 20,
+        ssl: needsSsl ? { rejectUnauthorized: false } : false,
+        max: parseInt(process.env.DB_POOL_MAX) || 20,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 15000,   // 15s — enough for Render cold-start
+        // Generous: covers a cold serverless-Postgres wake (Neon autosuspend)
+        // and a scale-to-zero container starting up.
+        connectionTimeoutMillis: 15000,
       }
     : {
         host:     process.env.DB_HOST     || 'localhost',

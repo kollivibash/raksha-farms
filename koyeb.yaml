@@ -1,0 +1,61 @@
+# Koyeb service definition for the Raksha Farms backend.
+#
+# Koyeb's free instance stays running (no scale-to-zero), which matters because
+# the order dashboard holds an open SSE connection at /orders/events — that
+# breaks on hosts that sleep the container between requests.
+#
+# Secrets are NOT stored here. Create them in the Koyeb dashboard under
+# Secrets, then they resolve via the {{ secret.NAME }} references below.
+# See MIGRATION.md for the full runbook.
+
+app: raksha-farms
+services:
+  - name: backend
+    type: web
+    git:
+      repository: github.com/rakshafarms/raksha-farms
+      branch: master
+      workdir: backend
+      buildpack:
+        build_command: npm ci --omit=dev
+        run_command: npm start
+    instance_types:
+      - type: free
+    regions:
+      - was          # Washington DC — the only region on the free instance type
+    ports:
+      - port: 8000
+        protocol: http
+    routes:
+      - path: /
+        port: 8000
+    health_checks:
+      - http:
+          path: /health
+          port: 8000
+        grace_period: 30
+        interval: 30
+        timeout: 5
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        secret: DATABASE_URL         # Neon pooled connection string
+      - key: JWT_SECRET
+        secret: JWT_SECRET
+      - key: ADMIN_SECRET
+        secret: ADMIN_SECRET
+      - key: CLOUDINARY_URL
+        secret: CLOUDINARY_URL
+      - key: RAZORPAY_KEY_ID
+        secret: RAZORPAY_KEY_ID
+      - key: RAZORPAY_KEY_SECRET
+        secret: RAZORPAY_KEY_SECRET
+      - key: GOOGLE_CLIENT_ID
+        secret: GOOGLE_CLIENT_ID
+      - key: CLIENT_URL
+        value: https://www.rakshafarms.com
+      - key: ADMIN_URL
+        value: https://raksha-farms-vxa5.vercel.app

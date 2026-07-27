@@ -88,10 +88,12 @@ function extractImageUrls(req) {
     allFiles = [req.file]                      // upload.single()
   }
 
+  // `f.url` is set by the upload middleware: a permanent Cloudinary https URL
+  // in production, or a local /uploads/... path in development.
   const coverFile      = allFiles.find(f => f.fieldname === 'image') || req.file
-  const image_url      = coverFile ? `/uploads/${coverFile.filename}` : undefined
+  const image_url      = coverFile?.url
   const galleryFiles   = allFiles.filter(f => f.fieldname === 'images')
-  const newGalleryUrls = galleryFiles.map(f => `/uploads/${f.filename}`)
+  const newGalleryUrls = galleryFiles.map(f => f.url).filter(Boolean)
   return { image_url, newGalleryUrls }
 }
 
