@@ -308,7 +308,8 @@ export default function InventoryPage() {
             </button>
           </div>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-5 py-3 text-gray-500 font-medium">Product</th>
@@ -378,6 +379,7 @@ export default function InventoryPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Bulk import / update modal — download .xlsx, edit, upload back */}

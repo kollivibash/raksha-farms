@@ -274,8 +274,8 @@ export default function CustomersPage() {
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="bg-gray-50/80 border-b border-gray-100">
               {['Customer', 'Contact', 'Orders', 'Total Spent', 'Last Order', 'Joined', 'Status', ''].map(h => (

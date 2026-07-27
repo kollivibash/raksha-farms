@@ -345,10 +345,12 @@ export default function BillingPage() {
         />
       )}
 
-      <div className="flex gap-4 h-[calc(100vh-130px)] overflow-hidden">
+      {/* Below lg the two panes stack and the page scrolls normally; from lg up
+          they sit side by side and each pane scrolls on its own. */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-130px)] lg:overflow-hidden">
 
         {/* ══ LEFT: Product Catalog ════════════════════════════════════════════ */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col gap-3 lg:overflow-hidden">
 
           {/* Search bar */}
           <div className="relative">
@@ -377,7 +379,7 @@ export default function BillingPage() {
           </div>
 
           {/* Product grid */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 lg:overflow-y-auto">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-4 border-[#1B4332] border-t-transparent rounded-full animate-spin"/>
@@ -389,7 +391,7 @@ export default function BillingPage() {
                 <p className="text-sm">No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2 pr-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 pr-1">
                 {filtered.map(p => {
                   const price      = p.offer_price && Number(p.offer_price) > 0 ? Number(p.offer_price) : Number(p.price)
                   const hasOffer   = p.offer_price && Number(p.offer_price) > 0 && Number(p.offer_price) < Number(p.price)
@@ -450,7 +452,7 @@ export default function BillingPage() {
         </div>
 
         {/* ══ RIGHT: Bill Panel — vertically scrollable ═══════════════════════ */}
-        <div className="w-[440px] flex-shrink-0 h-full overflow-y-auto flex flex-col gap-3 pb-3 pr-1"
+        <div className="w-full lg:w-[420px] xl:w-[440px] lg:flex-shrink-0 lg:h-full lg:overflow-y-auto flex flex-col gap-3 pb-3 lg:pr-1"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#1B4332 transparent' }}>
 
           {/* ── Customer ── */}

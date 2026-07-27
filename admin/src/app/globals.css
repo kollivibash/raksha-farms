@@ -2,4 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 * { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; }
+
+/* Nothing may push the page wider than the screen — kills the sideways
+   scroll that made admin pages need panning on laptops and phones */
+html { overflow-x: hidden; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f8fafc;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Media and embeds never overflow their column */
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
