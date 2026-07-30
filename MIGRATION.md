@@ -1,235 +1,154 @@
-# Migration: Render → Neon + Koyeb + Cloudinary
+# Migration: cut hosting cost without changing how the app behaves
 
-Moving off paid Render to a free stack, with no change to how the app behaves.
-
-| Piece | From | To | Free tier |
+| Piece | From | To | Cost |
 |---|---|---|---|
-| Database | Render Postgres | **Neon** | 0.5 GB, never expires |
-| Server | Render Web Service | **Koyeb** | 1 service, always-on |
-| Product images | Render local disk | **Cloudinary** | 25 credits/month |
+| Database | Render Postgres (paid) | **Neon** | Free, 0.5 GB, no expiry |
+| Server | Render Web (paid) | **Render Web free tier** | Free |
+| Product images | Render local disk | **Cloudinary** | Free, 25 credits/mo |
 
-**Why Koyeb and not Render's free tier:** free Render web services sleep after
-15 minutes idle. The admin order dashboard holds an open SSE connection
-(`/orders/events`), which dies on every sleep, and the first customer after a
-sleep waits ~50s. Koyeb's free instance does not sleep.
+**The backend URL does not change.** It stays `raksha-farms.onrender.com`, so the
+customer site and admin panel need no changes and no redeploy. There is nothing
+to repoint in Vercel.
 
-**Why Cloudinary is not optional:** `render.yaml` never declared a `disk:`, so
-uploads have been going to ephemeral container storage and getting wiped on
-every deploy. That already destroyed the images for 32 products — every
-`/uploads/…` URL in the database currently 404s. Free tiers everywhere have
-ephemeral filesystems, so images have to live in object storage regardless of
-host. This is a fix, not just a move.
+**Why Cloudinary is not optional.** `render.yaml` never declared a `disk:`, so
+uploads went to ephemeral container storage and were wiped on every deploy. That
+already destroyed the images for 32 products — every `/uploads/…` URL in the
+database currently 404s. This is a fix for an existing bug, not just a move.
 
-> Nothing in this file asks you to send a password, connection string, or API
-> key through chat. Every command runs on your machine, against your own
-> terminal. Keep it that way.
+**Why not Koyeb.** Their free tier is now "Free 5h" — 5 hours of compute per
+month with scale-to-zero. Unusable for a live store.
 
----
+**What the free Render tier costs you.** The web service sleeps after 15 minutes
+of inactivity; the next request waits ~50s while it wakes. Two things soften
+this: the frontend already retries with 8s/16s backoff, and the admin order
+dashboard holds an open SSE connection, which keeps the service awake the whole
+time anyone has it open.
 
-## Before you start
-
-Install the Postgres client tools (needed for `pg_dump`/`psql`):
-
-```bash
-brew install postgresql@16
-```
-
-Confirm the version is 16 or newer — Neon runs PG 16/17 and an older dump tool
-will refuse the restore:
-
-```bash
-pg_dump --version
-```
+> No step here asks you to send a password or connection string through chat.
+> Every command runs in your own terminal.
 
 ---
 
-## Step 1 — Create the three accounts
+## Status
 
-You have to do this part; I can't create accounts.
-
-1. **Neon** — <https://neon.tech> → sign up → new project, name it `raksha-farms`,
-   region closest to Hyderabad (`ap-southeast-1` Singapore).
-2. **Koyeb** — <https://koyeb.com> → sign up → connect your GitHub account.
-3. **Cloudinary** — <https://cloudinary.com> → sign up → free plan.
-
----
-
-## Step 2 — Back up the Render database
-
-Get the **External Database URL** from the Render dashboard
-(Postgres instance → Connect → External Connection).
-
-Put it in a shell variable so it never lands in your shell history file:
-
-```bash
-read -rs "RENDER_DB?Paste Render external DATABASE_URL: " && export RENDER_DB
-```
-
-Take the dump:
-
-```bash
-pg_dump "$RENDER_DB" --no-owner --no-privileges --format=custom --file=render-backup.dump
-```
-
-Confirm it is real and non-empty — expect a few hundred KB and a table list:
-
-```bash
-ls -lh render-backup.dump && pg_restore --list render-backup.dump | grep "TABLE DATA" | head -20
-```
-
-**Do not continue until this file exists and lists your tables.** This dump is
-your rollback.
+- [x] **1.** Neon + Cloudinary accounts created
+- [x] **2.** Render database backed up → `~/render-backup.dump` (131 KB, 14 tables)
+- [x] **3.** Restored into Neon — verified exact: 109 active / 127 total products,
+      341 orders, 26 users, 18 addresses, `product_reviews` present
+- [ ] **4.** Cloudinary credential
+- [ ] **5.** Repoint the Render service at Neon + Cloudinary
+- [ ] **6.** Downgrade the web service to free
+- [ ] **7.** Verify
+- [ ] **8.** Delete the Render database
 
 ---
 
-## Step 3 — Restore into Neon
+## Step 4 — Cloudinary credential
 
-From the Neon dashboard, copy the **pooled** connection string (the host
-contains `-pooler`). Use the *direct* (non-pooled) string for the restore —
-bulk restores are unhappy through a pooler.
+Cloudinary → **Dashboard** → **API Environment variable**:
 
-```bash
-read -rs "NEON_DIRECT?Paste Neon DIRECT connection string: " && export NEON_DIRECT
-pg_restore --no-owner --no-privileges --dbname="$NEON_DIRECT" render-backup.dump
+```
+cloudinary://<api_key>:<api_secret>@q0su9wry
 ```
 
-A few `already exists` notices are normal. Real errors mention `FATAL` or
-`could not connect`.
-
-Verify the row counts match what Render had:
-
-```bash
-psql "$NEON_DIRECT" -c "
-SELECT 'products' t, count(*) FROM products
-UNION ALL SELECT 'orders', count(*) FROM orders
-UNION ALL SELECT 'users', count(*) FROM users
-UNION ALL SELECT 'product_reviews', count(*) FROM product_reviews
-UNION ALL SELECT 'coupons', count(*) FROM coupons;"
-```
-
-Expected at time of writing: **108 products**. If products come back 0, stop —
-the restore failed and the old database is still live and untouched.
+If only the key and secret are shown separately, assemble it in that shape.
+`q0su9wry` is your cloud name.
 
 ---
 
-## Step 4 — Cloudinary credentials
+## Step 5 — Repoint the Render service
 
-Cloudinary dashboard → **API Environment variable**. It looks like:
+Render → **raksha-farms-backend** → **Environment**. Make these four changes:
 
-```
-cloudinary://123456789012345:abcdefGHIJklmnop@your-cloud-name
-```
-
-You'll paste this into Koyeb in the next step. The code already reads it:
-if `CLOUDINARY_URL` is set, uploads stream to Cloudinary; if not, they fall
-back to the local folder for development.
-
----
-
-## Step 5 — Deploy the backend to Koyeb
-
-Koyeb → **Create Service** → GitHub → repo `raksha-farms`.
-
-| Setting | Value |
+| Variable | Action |
 |---|---|
-| Branch | `master` |
-| Work directory | `backend` |
-| Build command | `npm ci --omit=dev` |
-| Run command | `npm start` |
-| Port | `8000` |
-| Health check path | `/health` |
-| Instance | Free |
-| Region | Washington DC (only free region) |
+| `DATABASE_URL` | Replace with the Neon **pooled** string (host contains `-pooler`) |
+| `CLOUDINARY_URL` | **Add** — from step 4 |
+| `ADMIN_SECRET` | Replace with a **new** password (the old one leaked) |
+| `UPLOAD_DIR` | **Delete** if present — unused now that images go to Cloudinary |
 
-Add these environment variables (mark the secret ones as **Secret**, not plain):
+Leave `JWT_SECRET` exactly as it is. Changing it signs out every logged-in
+customer.
 
-| Variable | Value |
-|---|---|
-| `NODE_ENV` | `production` |
-| `PORT` | `8000` |
-| `DATABASE_URL` | Neon **pooled** string (the `-pooler` host) |
-| `JWT_SECRET` | copy from Render, or generate a new one |
-| `ADMIN_SECRET` | **set a new password — the old one leaked** |
-| `CLOUDINARY_URL` | from step 4 |
-| `CLIENT_URL` | `https://www.rakshafarms.com` |
-| `ADMIN_URL` | `https://raksha-farms-vxa5.vercel.app` |
-| `RAZORPAY_KEY_ID` | copy from Render |
-| `RAZORPAY_KEY_SECRET` | copy from Render |
-| `GOOGLE_CLIENT_ID` | copy from Render |
+Use the **pooled** Neon string, not the direct one used for the restore. A web
+server opens far more short-lived connections than a restore does, and the
+direct endpoint will exhaust its limit.
 
-> Use the **pooled** Neon string here, not the direct one. A web server opens
-> and closes many short connections; the pooler is built for that and the
-> direct endpoint will exhaust its connection limit.
+Saving env vars triggers a redeploy. Watch the log for:
 
-Deploy, then check it is alive:
-
-```bash
-curl -s https://<your-koyeb-app>.koyeb.app/health
-curl -s "https://<your-koyeb-app>.koyeb.app/api/products?limit=1" | head -c 200
+```
+🖼  Image uploads → Cloudinary
+🚀 Backend running on http://localhost:10000
 ```
 
----
-
-## Step 6 — Point the frontends at Koyeb
-
-Two places, both in Vercel → Project → Settings → Environment Variables:
-
-- **Customer site**: `VITE_API_URL` = `https://<your-koyeb-app>.koyeb.app`
-- **Admin panel**: `NEXT_PUBLIC_API_URL` = `https://<your-koyeb-app>.koyeb.app/api`
-
-Note the `/api` suffix on the admin one and its absence on the customer one —
-that asymmetry is existing behaviour, not a mistake.
-
-Redeploy both from the Vercel dashboard (env changes need a rebuild).
-
-Also update `frontend/.env.production` in the repo so local production builds
-match, then commit.
+That first line is the proof Cloudinary is active. If it instead says
+`→ local ./uploads`, `CLOUDINARY_URL` did not get picked up.
 
 ---
 
-## Step 7 — Verify before switching off Render
+## Step 6 — Downgrade to the free instance
 
-Work through this on the live site with Render still running:
+Render → the service → **Settings** → **Instance Type** → **Free**.
 
-- [ ] Storefront loads and shows **108 products**
-- [ ] Product detail page opens; reviews load
-- [ ] Add to cart → checkout → **saved address prefills**
-- [ ] Place a test order → appears in admin Orders
+Then delete the pre-deploy command if one is still set (Settings → Build &
+Deploy). It previously ran `seed.js`, which wipes the product catalogue. There
+is a guard in the code now, but the command should not be there at all.
+
+---
+
+## Step 7 — Verify
+
+```bash
+curl -s https://raksha-farms.onrender.com/health
+curl -s "https://raksha-farms.onrender.com/api/products?limit=500" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"
+```
+
+Expect `{"status":"ok"}` and **108** (the API filters to active *and* in-stock).
+
+Then on the live site:
+
+- [ ] Storefront loads, 108 products
+- [ ] Product page opens, reviews load
+- [ ] Checkout — saved address prefills
+- [ ] Test order → appears in admin Orders
 - [ ] Admin login works with the **new** `ADMIN_SECRET`
-- [ ] Admin Orders page receives live updates (confirms SSE survived)
-- [ ] POS: pick a repeat customer → phone **and address** autofill
-- [ ] POS: bill a weight item, print — receipt is dark and bold
-- [ ] **Upload a product image → reload → still there** (the Cloudinary fix)
+- [ ] Admin Orders receives live updates (SSE)
+- [ ] POS — pick a repeat customer, phone **and address** autofill
+- [ ] POS — bill a weight item, print, receipt is dark and bold
+- [ ] **Upload a product image → reload → still there** ← the Cloudinary fix
 - [ ] Bulk import a small CSV
 
-The image upload check is the important one. It is the failure the old setup
+The image upload is the one that matters most. It is the failure the old setup
 had, so it is the thing most worth proving.
 
 ---
 
-## Step 8 — Decommission Render
+## Step 8 — Delete the Render database
 
-Only after everything above passes:
+Only once step 7 passes.
 
-1. Keep `render-backup.dump` somewhere safe — that is your point-in-time rollback.
-2. Render dashboard → suspend the web service and the database first.
-3. Leave them suspended a week. If nothing breaks, delete them.
+This is where the saving actually lands — until the Postgres instance is
+deleted, you are still paying for it. It also retires the database password that
+was exposed during this migration.
 
-**Rolling back**, if needed: set the Vercel env vars back to
-`https://raksha-farms.onrender.com` and redeploy. That is the whole rollback —
-which is why Render must stay suspended-not-deleted until you are confident.
+1. Confirm `~/render-backup.dump` is somewhere safe. Copy it off the laptop.
+2. Render → the Postgres instance → **Suspend** first, not delete.
+3. Leave it suspended a few days. If nothing breaks, delete it.
+
+**Rollback**, while the database still exists: set `DATABASE_URL` back to the
+Render internal string and redeploy. That is the whole rollback — which is why
+it stays suspended-not-deleted until you are confident.
 
 ---
 
 ## The 32 lost images
 
-The database still holds `/uploads/…` paths for 32 products whose files no
-longer exist. Nothing can recover them; the bytes are gone. Once Cloudinary is
-live, re-upload those images through the admin product editor and the new URLs
-will be permanent.
+The database still holds `/uploads/…` paths for 32 products whose files are gone.
+Nothing can recover them. Once Cloudinary is live, re-upload through the admin
+product editor and the new URLs will be permanent.
 
-To list exactly which products need a new image:
+To list which products need one:
 
 ```bash
-psql "$NEON_DIRECT" -c "SELECT name FROM products WHERE image_url LIKE '/uploads/%' ORDER BY name;"
+psql "$NEON_DB" -c "SELECT name FROM products WHERE image_url LIKE '/uploads/%' ORDER BY name;"
 ```
