@@ -35,11 +35,12 @@ time anyone has it open.
 - [x] **2.** Render database backed up → `~/render-backup.dump` (131 KB, 14 tables)
 - [x] **3.** Restored into Neon — verified exact: 109 active / 127 total products,
       341 orders, 26 users, 18 addresses, `product_reviews` present
-- [ ] **4.** Cloudinary credential
-- [ ] **5.** Repoint the Render service at Neon + Cloudinary
+- [x] **4.** Cloudinary credential set
+- [x] **5.** Render service repointed — verified live: serving 108 products from
+      Neon, `🖼 Image uploads → Cloudinary` in the boot log, CORS and SSE intact
 - [ ] **6.** Downgrade the web service to free
-- [ ] **7.** Verify
-- [ ] **8.** Delete the Render database
+- [ ] **7.** Verify image upload survives a redeploy ← the one that matters
+- [ ] **8.** Delete the Render database ← where the cost saving actually lands
 
 ---
 
