@@ -29,6 +29,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 4000
 
+// Behind Render's load balancer, the client IP arrives in X-Forwarded-For.
+// Without this, express-rate-limit keys every request to the proxy's own IP —
+// so all customers share one bucket and a single busy visitor rate-limits the
+// entire store. Trust exactly one hop: the platform proxy, nothing beyond it.
+app.set('trust proxy', 1)
+
 // Security
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },

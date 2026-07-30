@@ -2,7 +2,6 @@ import multer from 'multer'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
-import { v2 as cloudinary } from 'cloudinary'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Product image uploads.
@@ -22,12 +21,25 @@ import { v2 as cloudinary } from 'cloudinary'
 // volume. Cloudinary removes that failure mode entirely.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const useCloudinary = Boolean(process.env.CLOUDINARY_URL)
+// The Cloudinary SDK parses CLOUDINARY_URL at *import* time and throws if it is
+// malformed — which would take the whole server down over a mistyped image
+// credential. So validate the shape first and only import when it is sane.
+// A broken image config must degrade to local storage, never crash the API.
+const rawCloudinaryUrl = (process.env.CLOUDINARY_URL || '').trim().replace(/^["']|["']$/g, '')
+const CLOUDINARY_RE = /^cloudinary:\/\/[^:@/]+:[^:@/]+@[^:@/]+$/
+
+let cloudinary = null
+export const useCloudinary = CLOUDINARY_RE.test(rawCloudinaryUrl)
 
 if (useCloudinary) {
-  // Reads CLOUDINARY_URL (cloudinary://<key>:<secret>@<cloud_name>) from env.
+  process.env.CLOUDINARY_URL = rawCloudinaryUrl   // normalised (quotes/space stripped)
+  ;({ v2: cloudinary } = await import('cloudinary'))
   cloudinary.config({ secure: true })
   console.log('🖼  Image uploads → Cloudinary')
+} else if (rawCloudinaryUrl) {
+  console.warn('⚠  CLOUDINARY_URL is set but malformed — ignoring it and using local ./uploads.')
+  console.warn('   Expected exactly: cloudinary://<api_key>:<api_secret>@<cloud_name>')
+  console.warn(`   Got ${rawCloudinaryUrl.length} chars starting "${rawCloudinaryUrl.slice(0, 14)}…"`)
 } else {
   console.log('🖼  Image uploads → local ./uploads (set CLOUDINARY_URL for persistent storage)')
 }
